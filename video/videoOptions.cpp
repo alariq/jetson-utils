@@ -38,6 +38,10 @@ videoOptions::videoOptions()
 	numBuffers  = 4;
 	loop        = 0;
 	latency     = 10;
+	minExposureTime = 0;
+	maxExposureTime = 0;
+	minGain	    = 0;
+	maxGain	    = 0;
 	zeroCopy    = true;
 	ioType      = INPUT;
 	deviceType  = DEVICE_DEFAULT;
@@ -79,6 +83,9 @@ void videoOptions::Print( const char* prefix ) const
 		LogInfo("  -- height:     %u\n", height);
 	
 	LogInfo("  -- frameRate:  %g\n", frameRate);
+
+	LogInfo("  -- min/max exposure time:  %u/%u\n", minExposureTime, maxExposureTime);
+	LogInfo("  -- min/max gain:  %u/%u\n", minGain, maxGain);
 	
 	if( ioType == OUTPUT && (deviceType == DEVICE_IP || deviceType == DEVICE_FILE) )
 		LogInfo("  -- bitRate:    %u\n", bitRate);
@@ -192,6 +199,12 @@ bool videoOptions::Parse( const char* URI, const commandLine& cmdLine, videoOpti
 
 	if( frameRate == 0 )
 		frameRate = cmdLine.GetFloat("framerate");
+
+	minExposureTime = cmdLine.GetUnsignedInt("min-exposure", minExposureTime);
+	maxExposureTime = cmdLine.GetUnsignedInt("max-exposure", maxExposureTime);
+
+	minGain = cmdLine.GetUnsignedInt("min-gain", minGain);
+	maxGain = cmdLine.GetUnsignedInt("max-gain", maxGain);
 
 	// flip-method
 	const char* flipStr = (type == INPUT) ? cmdLine.GetString("input-flip")

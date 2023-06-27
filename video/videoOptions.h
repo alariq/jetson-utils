@@ -127,6 +127,18 @@ public:
 	int latency;
 
 	/**
+	 * Min and Max exposure time (in case nvarguscamerasrc is used)
+	 */
+	int minExposureTime;
+	int maxExposureTime;
+
+	/**
+	 * Min and Max gain
+	 */
+	int minGain;
+	int maxGain;
+
+	/**
 	 * Device interface types.
 	 */
 	enum DeviceType
