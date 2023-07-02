@@ -24,6 +24,9 @@
 #include "imageWriter.h"
 
 #include "glDisplay.h"
+#ifdef WITH_IMGUI
+#include "dearimgui.h"
+#endif
 #include "gstEncoder.h"
 
 #include "logging.h"
@@ -109,7 +112,11 @@ videoOutput* videoOutput::Create( const videoOptions& options )
 	}
 	else if( uri.protocol == "display" )
 	{
+#ifdef WITH_IMGUI
+		output = DearImguiDisplay::Create(options);
+#else
 		output = glDisplay::Create(options);
+#endif
 	}
 	else
 	{

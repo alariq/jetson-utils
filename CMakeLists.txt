@@ -99,11 +99,28 @@ endif()
 file(GLOB jetsonUtilitySources *.cpp camera/*.cpp codec/*.cpp cuda/*.cu cuda/*.cpp display/*.cpp image/*.cpp input/*.cpp network/*.cpp threads/*.cpp video/*.cpp)
 file(GLOB jetsonUtilityIncludes *.h *.hpp camera/*.h codec/*.h cuda/*.h cuda/*.cuh display/*.h image/*.h image/*.inl input/*.h network/*.h threads/*.h threads/*.inl video/*.h)
 
+set(WITH_IMGUI TRUE)
+
+if(WITH_IMGUI)
+	find_package(glfw3 REQUIRED)
+
+	add_definitions(-DWITH_IMGUI)
+	file(GLOB IMGUI_SRC dearimgui/dearimgui.cpp imgui/*.cpp imgui/backends/imgui_impl_opengl3.cpp imgui/backends/imgui_impl_glfw.cpp)
+	file(GLOB IMGUI_INC dearimgui/dearimgui.h imgui/*.h imgui/backends/imgui_impl_opengl3.h imgui/backends/imgui_impl_glfw.h)
+	list(APPEND jetsonUtilitySources  ${IMGUI_SRC})
+	list(APPEND jetsonUtilityIncludes  ${IMGUI_INC})
+endif()
+
+
 cuda_add_library(jetson-utils SHARED ${jetsonUtilitySources})
 target_link_libraries(jetson-utils GL GLU GLEW gstreamer-1.0 gstapp-1.0 gstpbutils-1.0 gstwebrtc-1.0 gstsdp-1.0 gstrtspserver-1.0 json-glib-1.0 soup-2.4 ${CUDA_nppicc_LIBRARY})	
 
 if(NVBUF_UTILS)
 	target_link_libraries(jetson-utils nvbuf_utils)
+endif()
+
+if(WITH_IMGUI)
+	target_link_libraries(jetson-utils glfw)
 endif()
 
 # transfer all headers to the include directory 
@@ -126,7 +143,7 @@ install(TARGETS jetson-utils DESTINATION lib EXPORT jetson-utilsConfig)
 install(EXPORT jetson-utilsConfig DESTINATION share/jetson-utils/cmake)
 
 # build python bindings + samples
-add_subdirectory(python)
+#add_subdirectory(python)
 add_subdirectory(video/video-viewer)
 
 #add_subdirectory(camera/camera-viewer)
