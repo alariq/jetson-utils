@@ -46,6 +46,13 @@ uint32_t glGetNumDisplays()
 {
 	return gDisplays.size();
 }
+
+uint32_t glAddDisplay(glDisplay* display)
+{
+	gDisplays.push_back(display);
+	return gDisplays.size() - 1;
+
+}
 //--------------------------------------------------------------
 
 const char* glDisplay::DEFAULT_TITLE = "NVIDIA Jetson";
