@@ -1,6 +1,7 @@
 #include "dearimgui.h"
 
 #include "glDisplay.h"
+#include "glTexture.h"
 #include "imageFormat.h"
 
 //#include "imgui.h"
@@ -76,6 +77,13 @@ bool DearImguiDisplay::Init()
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
+
+	GLenum err = glewInit();
+	if (GLEW_OK != err) {
+		LogError(LOG_GL "GLEW Error: %s\n", glewGetErrorString(err));
+		return false;
+	}
+
 	mScreenWidth  = mOptions.width;
 	mScreenHeight = mOptions.height;
 
@@ -104,8 +112,8 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	ImGui::NewFrame();
 	ImGui::ShowDemoWindow();
 
-	static bool show_demo_window = true;
-	static bool show_another_window = false;
+	static bool show_demo_window = false;
+	static bool show_another_window = true;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 	if(glfwWindowShouldClose(glfwWindow_))
@@ -150,6 +158,47 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 		ImGui::End();
 	}
 
+	//glDisplay::Render(image, width, height, format);
+
+	bool display_success = true;
+	if (image) {
+
+		// determine input format
+		if (imageFormatIsRGB(format))
+		{
+			// resize the window once to match the feed, but let the user resize/maximize
+			// only resize again if the window is then smaller than the feed
+			//if (!mResizedToFeed || ((GetWidth() < width || GetHeight() < height) && (width < mScreenWidth && height < mScreenHeight)))
+			//{
+			//	SetSize(width, height);
+			//	mResizedToFeed = true;
+			//}
+
+			// obtain the OpenGL texture to use
+			//glTexture* interopTex = allocTexture(width, height, format);
+			//if(!interopTex) {
+			//}
+			glTexture* tex = PrepareImage(image, width, height, format, 0, 0, true);
+			ImGui::Begin("OpenGL Texture Text");
+			ImGui::Text("pointer = %p", tex);
+			ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));
+			ImGui::End();
+
+		} else {
+			LogError(LOG_GL "glDisplay::Render() -- unsupported image format (%s)\n", imageFormatToStr(format));
+			LogError(LOG_GL "                       supported formats are:\n");
+			LogError(LOG_GL "                           * rgb8\n");
+			LogError(LOG_GL "                           * rgba8\n");
+			LogError(LOG_GL "                           * rgb32\n");
+			LogError(LOG_GL "                           * rgba32\n");
+			display_success = false;
+		}
+	}
+
+	if(render_cb_) {
+		render_cb_(uptr_);
+	}
+
 	ImGui::Render();
 	int display_w, display_h;
 	glfwGetFramebufferSize(glfwWindow_, &display_w, &display_h);
@@ -157,13 +206,15 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	//glDisplay::Render(image, width, height, format);
+
+	// render sub-streams
+	const bool substreams_success = videoOutput::Render(image, width, height, format);
 
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	
 	glfwSwapBuffers(glfwWindow_);
 
-	return true;
+	return display_success && substreams_success;
 }
 
 void DearImguiDisplay::SetStatus(const char* str) {

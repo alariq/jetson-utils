@@ -104,6 +104,9 @@
 class videoOutput
 {
 public:
+
+	typedef void (*RenderCallback_t)(void* ptr);
+
 	/**
 	 * Create videoOutput interface from a videoOptions struct that's already been filled out.
 	 * It's expected that the supplied videoOptions already contain a valid resource URI.
@@ -200,6 +203,15 @@ public:
 	 * @returns `true` on success, `false` on error.
 	 */
 	virtual bool Render( void* image, uint32_t width, uint32_t height, imageFormat format );
+
+
+	/**
+	 * Sets render callback whick will be called during the Render call at appropriate time
+	 *
+	 * @param callback function
+	 * @param user pointer which will be passed to the callback 
+	 */
+	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb, void* uptr) {}
 
 	/**
 	 * Begin streaming the device.

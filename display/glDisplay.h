@@ -173,6 +173,7 @@ public:
 	 * Note that if normalization is selected to be performed, it will be done in-place on the image
 	 */
 	void RenderImage( void* image, uint32_t width, uint32_t height, imageFormat format, float x=0.0f, float y=30.0f, bool normalize=true );
+	glTexture* PrepareImage( void* image, uint32_t width, uint32_t height, imageFormat format, float x=0.0f, float y=30.0f, bool normalize=true );
 
 	/**
 	 * Begin the frame, render one CUDA image using OpenGL interop, and end the frame.

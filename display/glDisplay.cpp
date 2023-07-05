@@ -558,16 +558,16 @@ void glDisplay::Render( glTexture* texture, float x, float y )
 
 
 // RenderImage
-void glDisplay::RenderImage( void* img, uint32_t width, uint32_t height, imageFormat format, float x, float y, bool normalize )
+glTexture* glDisplay::PrepareImage( void* img, uint32_t width, uint32_t height, imageFormat format, float x, float y, bool normalize )
 {
 	if( !img || width == 0 || height == 0 )
-		return;
+		return nullptr;
 	
 	// obtain the OpenGL texture to use
 	glTexture* interopTex = allocTexture(width, height, format);
 
 	if( !interopTex )
-		return;
+		return nullptr;
 	
 	// normalize pixels from [0,255] -> [0,1]
 	if( normalize && (format == IMAGE_RGB32F || format == IMAGE_RGBA32F) )
@@ -583,7 +583,7 @@ void glDisplay::RenderImage( void* img, uint32_t width, uint32_t height, imageFo
 			if( CUDA_FAILED(cudaMalloc(&mNormalizedCUDA, width * height * sizeof(float) * 4)) )	// just allocate this as float4 for simplicity
 			{
 				LogError(LOG_GL "glDisplay.Render() failed to allocate CUDA memory for normalization\n");
-				return;
+				return nullptr;
 			}
 
 			mNormalizedWidth = width;
@@ -596,7 +596,7 @@ void glDisplay::RenderImage( void* img, uint32_t width, uint32_t height, imageFo
 	 						  width, height, format)) )
 		{
 			LogError(LOG_GL "glDisplay.Render() failed to normalize image\n");
-			return;
+			return nullptr;
 		}
 
 		img = mNormalizedCUDA;
@@ -612,6 +612,13 @@ void glDisplay::RenderImage( void* img, uint32_t width, uint32_t height, imageFo
 		interopTex->Unmap();
 	}
 
+	return interopTex;
+}
+
+
+void glDisplay::RenderImage(void* img, uint32_t width, uint32_t height, imageFormat format, float x, float y, bool normalize)
+{
+	glTexture* interopTex = PrepareImage(img, width, height, format, x, y, normalize);
 	// draw the texture
 	interopTex->Render(x,y);
 }
