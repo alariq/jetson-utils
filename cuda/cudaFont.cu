@@ -129,6 +129,8 @@ cudaFont* cudaFont::Create( float size )
 	
 	fonts.push_back("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf");
 	fonts.push_back("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+	fonts.push_back("/usr/share/fonts/TTF/DejaVuSansMono.ttf");
+	fonts.push_back("/usr/share/fonts/TTF/DejaVuSans.ttf");
 
 	return Create(fonts, size);
 }
