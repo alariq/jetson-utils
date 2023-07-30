@@ -594,6 +594,12 @@ protected:
 
 	glTexture* allocTexture( uint32_t width, uint32_t height, imageFormat format );	
 
+	/**
+	* sebi: Chance to release all render resources early because if we derive from the class then our render context will be destroyed in
+	* derived destructor and resources in this base class, but it is too late as there is no context anymore
+	*/
+	void ReleaseRenderResources();
+
 	void activateViewport();
 
 	void dispatchEvent( uint16_t msg, int a, int b );

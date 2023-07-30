@@ -224,6 +224,9 @@ void DearImguiDisplay::SetStatus(const char* str) {
 }
 
 DearImguiDisplay::~DearImguiDisplay() {
+
+	ReleaseRenderResources();
+
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();

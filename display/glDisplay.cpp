@@ -112,22 +112,8 @@ glDisplay::glDisplay( const videoOptions& options ) : videoOutput(options)
 	AddEventHandler(&onEvent, this);
 }
 
-
-// Destructor
-glDisplay::~glDisplay()
+void glDisplay::ReleaseRenderResources()
 {
-	// remove this instance from the global list
-	const size_t numDisplays = gDisplays.size();
-
-	for( size_t n=0; n < numDisplays; n++ )
-	{
-		if( gDisplays[n] == this )
-		{
-			gDisplays.erase(gDisplays.begin() + n);
-			break;
-		}
-	}
-
 	// release widgets from the window
 	RemoveAllWidgets();
 
@@ -151,6 +137,25 @@ glDisplay::~glDisplay()
 		CUDA(cudaFree(mNormalizedCUDA));
 		mNormalizedCUDA = NULL;
 	}
+
+}
+
+// Destructor
+glDisplay::~glDisplay()
+{
+	// remove this instance from the global list
+	const size_t numDisplays = gDisplays.size();
+
+	for( size_t n=0; n < numDisplays; n++ )
+	{
+		if( gDisplays[n] == this )
+		{
+			gDisplays.erase(gDisplays.begin() + n);
+			break;
+		}
+	}
+
+	ReleaseRenderResources();
 
 	// destroy the OpenGL context
 	glXDestroyContext(mDisplayX, mContextGL);
