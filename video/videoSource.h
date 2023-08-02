@@ -239,7 +239,7 @@ public:
 	 *
 	 * @returns `true` if a frame was captured, `false` if there was an error or a timeout occurred.
 	 */
-	template<typename T> bool Capture( T** image, uint64_t timeout=DEFAULT_TIMEOUT, int* status=NULL )		{ return Capture((void**)image, imageFormatFromType<T>(), timeout); }
+	template<typename T> bool Capture( T** image, uint64_t timeout=DEFAULT_TIMEOUT, int* status=NULL )		{ return Capture((void**)image, imageFormatFromType<T>(), timeout, status); }
 	
 	/**
 	 * Capture the next image from the video stream.
