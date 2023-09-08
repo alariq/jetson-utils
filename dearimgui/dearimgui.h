@@ -9,7 +9,9 @@
 class DearImguiDisplay: public glDisplay {
 
 public:
-	DearImguiDisplay(const videoOptions& options):glDisplay(options),render_cb_(0), uptr_(0) {}
+	DearImguiDisplay(const videoOptions& options) :glDisplay(options), render_cb_(0), uptr_(0) {
+		ImgPosAbs[0] = ImgPosAbs[1] = 0;
+	}
 	~DearImguiDisplay();
 	static DearImguiDisplay* Create( const videoOptions& options );
 	virtual bool Render(void* image, uint32_t width, uint32_t height, imageFormat format) override;
@@ -19,9 +21,19 @@ public:
 		uptr_ = uptr;
 	}
 
+	virtual void SetDragFinishedCallback(glDisplay::DragFinishedCallback_t drag_finished_cb, void* user_ptr) override {
+		drag_finished_cb_ = drag_finished_cb;
+		drag_cb_uptr_ = user_ptr;
+	}
+
 private:
 	bool Init();
 	struct GLFWwindow* glfwWindow_;
 	videoOutput::RenderCallback_t render_cb_;
 	void* uptr_;
+	int ImgPosAbs[2];
+
+	glDisplay::DragFinishedCallback_t drag_finished_cb_;
+	void* drag_cb_uptr_;
+	int mLastBBox[4];
 };

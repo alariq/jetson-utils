@@ -122,6 +122,42 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 		return true;
 	}
 
+	ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
+	mMousePos[0] = (int)mousePositionAbsolute.x;
+	mMousePos[1] = (int)mousePositionAbsolute.y;
+
+	bool RMB_Down = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+	bool LMB_Down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+	bool MMB_Down = ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+
+	bool mouseButtonsPrev[sizeof(mMouseButtons)/sizeof(mMouseButtons[0])];
+	memcpy(mouseButtonsPrev, mMouseButtons, sizeof(mMouseButtons));
+	if(!mMouseButtons[MOUSE_RIGHT] && RMB_Down) {
+		if(mDragMode != DragDisabled) {
+			mMouseDragOrigin[0] = mMousePos[0];
+			mMouseDragOrigin[1] = mMousePos[1];
+			LogInfo(LOG_GL "Started Drag with x: %d y: %d\n", mMouseDragOrigin[0], mMouseDragOrigin[1]);
+		}
+	}
+
+	if(RMB_Down && mMouseDragOrigin[0] >=0 && mMouseDragOrigin[1] >=0) {
+		mMouseDrag[0] = mMousePos[0];
+		mMouseDrag[1] = mMousePos[1];
+		LogInfo(LOG_GL "Current Drag pos x: %d y: %d\n", mMouseDrag[0], mMouseDrag[1]);
+	}
+
+	const bool bDragFinished = mMouseButtons[MOUSE_RIGHT] && !RMB_Down;
+	if(bDragFinished) {
+		mMouseDragOrigin[0] = -1;
+		mMouseDragOrigin[1] = -1;
+		mMouseDrag[0] = -1;
+		mMouseDrag[1] = -1;
+	}
+
+	mMouseButtons[MOUSE_RIGHT] = RMB_Down;
+	mMouseButtons[MOUSE_LEFT] = LMB_Down;
+	mMouseButtons[MOUSE_MIDDLE] = MMB_Down;
+
 	if (show_demo_window)
 		ImGui::ShowDemoWindow(&show_demo_window);
 
@@ -159,7 +195,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	}
 
 	//glDisplay::Render(image, width, height, format);
-
+	ImVec2 imgWinSize = ImVec2(0,0);
 	bool display_success = true;
 	if (image) {
 
@@ -182,6 +218,12 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 			ImGui::Begin("OpenGL Texture Text");
 			ImGui::Text("pointer = %p", tex);
 			ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));
+				bool isHovered = ImGui::IsItemHovered();
+				bool isFocused = ImGui::IsItemFocused();
+				ImVec2 winPos = ImGui::GetItemRectMin();
+				imgWinSize = ImGui::GetItemRectSize();
+				ImgPosAbs[0] = (int)winPos.x;
+				ImgPosAbs[1] = (int)winPos.y;
 			ImGui::End();
 
 		} else {
@@ -211,8 +253,45 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	const bool substreams_success = videoOutput::Render(image, width, height, format);
 
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	activateViewport();
+	if( (mDragMode == DragSelect || mDragMode == DragCreate) && IsDragging(mDragMode) )
+	{
+		int x, y;
+		int width, height;
+
+		if( GetDragRect(&x, &y, &width, &height) ) {
+			RenderOutline(x, y, width, height, 1, 1, 1);
+			mLastBBox[0] = x;
+			mLastBBox[1] = y;
+			mLastBBox[2] = width;
+			mLastBBox[3] = height;
+		}
+	}
 	
 	glfwSwapBuffers(glfwWindow_);
+
+	if(bDragFinished && drag_finished_cb_) {
+		int bbX0 = mLastBBox[0];
+		int bbY0 = mLastBBox[1];
+		int bbX1 = mLastBBox[0] + mLastBBox[2];
+		int bbY1 = mLastBBox[1] + mLastBBox[3];
+		
+		int wX0 = ImgPosAbs[0];
+		int wY0 = ImgPosAbs[1];
+		int wX1 = wX0 + imgWinSize.x;
+		int wY1 = wY0 + imgWinSize.y;
+
+		// only call it if bb overlaps window
+		if (bbX0 < wX1 && bbY0 < wY1 && bbX1 > wX0 && bbY1 > wY0) {
+			bbX0 = std::max(bbX0, wX0);
+			bbY0 = std::max(bbY0, wY0);
+			bbX1 = std::min(bbX1, wX1);
+			bbY1 = std::min(bbY1, wY1);
+			// relative to the image widow
+			drag_finished_cb_(bbX0 - wX0, bbY0 - wY0, bbX1 - bbX0, bbY1 - bbY0, drag_cb_uptr_);
+		}	
+	}
 
 	return display_success && substreams_success;
 }

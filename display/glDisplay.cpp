@@ -1000,7 +1000,6 @@ bool glDisplay::GetDragRect( int* x, int* y, int* width, int* height )
 	return true;
 }
 
-
 // GetDragCoords
 bool glDisplay::GetDragCoords( int* x1, int* y1, int* x2, int* y2 )
 {
@@ -1021,7 +1020,6 @@ bool glDisplay::GetDragCoords( int* x1, int* y1, int* x2, int* y2 )
 
 	return true;
 }
-
 
 // AddWidget
 glWidget* glDisplay::AddWidget( glWidget* widget )
