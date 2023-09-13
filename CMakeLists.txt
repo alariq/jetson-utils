@@ -99,7 +99,7 @@ endif()
 file(GLOB jetsonUtilitySources *.cpp camera/*.cpp codec/*.cpp cuda/*.cu cuda/*.cpp display/*.cpp image/*.cpp input/*.cpp network/*.cpp threads/*.cpp video/*.cpp)
 file(GLOB jetsonUtilityIncludes *.h *.hpp camera/*.h codec/*.h cuda/*.h cuda/*.cuh display/*.h image/*.h image/*.inl input/*.h network/*.h threads/*.h threads/*.inl video/*.h)
 
-set(WITH_IMGUI TRUE)
+option(WITH_IMGUI "Enable dear imgui support" TRUE)
 
 if(WITH_IMGUI)
 	find_package(glfw3 REQUIRED)
