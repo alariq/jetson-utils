@@ -107,6 +107,11 @@ if(WITH_IMGUI)
 	add_definitions(-DWITH_IMGUI)
 	file(GLOB IMGUI_SRC dearimgui/dearimgui.cpp imgui/*.cpp imgui/backends/imgui_impl_opengl3.cpp imgui/backends/imgui_impl_glfw.cpp)
 	file(GLOB IMGUI_INC dearimgui/dearimgui.h imgui/*.h imgui/backends/imgui_impl_opengl3.h imgui/backends/imgui_impl_glfw.h)
+
+    # implot
+    set(IMGUI_SRC  ${IMGUI_SRC} implot/implot.cpp implot/implot_items.cpp)
+    set(IMGUI_INC ${IMGUI_INC} implot/implot.h implot/implot_internal.h)
+
 	list(APPEND jetsonUtilitySources  ${IMGUI_SRC})
 	list(APPEND jetsonUtilityIncludes  ${IMGUI_INC})
 endif()
