@@ -7,6 +7,7 @@
 //#include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "implot.h"
 
 #include <GLFW/glfw3.h>
 
@@ -64,7 +65,8 @@ bool DearImguiDisplay::Init()
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImPlot::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
 	
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
@@ -306,7 +308,9 @@ DearImguiDisplay::~DearImguiDisplay() {
 
 	ReleaseRenderResources();
 
-	ImGui_ImplOpenGL3_Shutdown();
+    ImPlot::DestroyContext();
+
+    ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 
