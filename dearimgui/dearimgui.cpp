@@ -115,7 +115,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	ImGui::ShowDemoWindow();
 
 	static bool show_demo_window = false;
-	static bool show_another_window = true;
+	static bool show_another_window = false;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 	if(glfwWindowShouldClose(glfwWindow_))
@@ -164,6 +164,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 		ImGui::ShowDemoWindow(&show_demo_window);
 
 	// 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
+	if(0)
 	{
 		static float f = 0.0f;
 		static int counter = 0;
