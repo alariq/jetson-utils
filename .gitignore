@@ -1,2 +1,3 @@
 build/
 *.pyc
+.ccls-cache/
