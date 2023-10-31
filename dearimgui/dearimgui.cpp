@@ -112,7 +112,6 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-	ImGui::ShowDemoWindow();
 
 	static bool show_demo_window = false;
 	static bool show_another_window = false;
