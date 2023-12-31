@@ -76,7 +76,7 @@ static void applyDisplayFlags( videoOutput* output, const commandLine& cmdLine )
 	if( !output )
 		return;
 	
-	if( output->IsType(glDisplay::Type) )
+	if( output->IsType(glDisplay::Type) || output->IsType(DearImguiDisplay::Type) )
 	{
 		glDisplay* display = (glDisplay*)output;
 		

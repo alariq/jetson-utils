@@ -57,6 +57,9 @@
 		  "                         to disk, in addition to the primary output above\n"      \
 		  "  --bitrate=BITRATE      desired target VBR bitrate for compressed streams,\n"    \
 		  "                         in bits per second. The default is 4000000 (4 Mbps)\n"	\
+		  "  --swap-interval=N      The minimum number of screen updates to wait for until the buffers are swapped by glfwSwapBuffers.\n" \
+		  "								0 - No VSync"										\
+		  "								>0 - VSync with given amount of screen updates"		\
 		  "  --headless             don't create a default OpenGL GUI window\n\n"
 
 
@@ -301,6 +304,7 @@ public:
 	 *    - glDisplay::Type
 	 *    - gstEncoder::Type
 	 *    - imageWriter::Type
+	 * 	  - DearImguiDisplay::Type
 	 */
 	virtual inline uint32_t GetType() const			{ return 0; }
 

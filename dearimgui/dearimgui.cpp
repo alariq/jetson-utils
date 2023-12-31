@@ -55,12 +55,19 @@ bool DearImguiDisplay::Init()
 		mOptions.height = defaultHeight;
 	}
 
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+	glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+	glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+	glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+	glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+
 	GLFWwindow* window = glfwCreateWindow(mOptions.width, mOptions.height, "Dear ImGui GLFW+OpenGL3", nullptr, nullptr);
 	if (window == nullptr)
 		return false;
 	glfwWindow_ = window;
 	glfwMakeContextCurrent(window);
-	glfwSwapInterval(0); // disable vsync
+	glfwSwapInterval(mOptions.swapInterval);
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -217,8 +224,8 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 			//if(!interopTex) {
 			//}
 			glTexture* tex = PrepareImage(image, width, height, format, 0, 0, true);
-			ImGui::Begin("OpenGL Texture Text");
-			ImGui::Text("pointer = %p", tex);
+			ImGui::Begin("OpenGL Texture Text", nullptr, ImGuiWindowFlags_NoTitleBar);
+			//ImGui::Text("pointer = %p", tex);
 			ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));
 				bool isHovered = ImGui::IsItemHovered();
 				bool isFocused = ImGui::IsItemFocused();
@@ -304,6 +311,27 @@ void DearImguiDisplay::SetStatus(const char* str) {
 	}
 }
 
+void DearImguiDisplay::SetMaximized( bool maximized ) {
+	if(maximized) {
+		glfwMaximizeWindow(glfwWindow_);
+	} else {
+		glfwRestoreWindow(glfwWindow_);
+	}
+}
+
+bool DearImguiDisplay::IsMaximized() {
+	return glfwGetWindowAttrib(glfwWindow_, GLFW_MAXIMIZED);
+}
+void DearImguiDisplay::SetFullscreen( bool fullscreen ) {
+	GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+	const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+	glfwSetWindowMonitor(glfwWindow_, fullscreen ? monitor : nullptr, 0, 0, mode->width, mode->height, mode->refreshRate);
+}
+
+bool DearImguiDisplay::IsFullscreen() {
+	return nullptr != glfwGetWindowMonitor(glfwWindow_);
+}
+
 DearImguiDisplay::~DearImguiDisplay() {
 
 	ReleaseRenderResources();
@@ -316,5 +344,7 @@ DearImguiDisplay::~DearImguiDisplay() {
 
 	glfwDestroyWindow(glfwWindow_);
 	glfwTerminate();
+	
+	fprintf(stderr, "~dearimgui display\n");
 }
 

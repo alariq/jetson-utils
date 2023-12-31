@@ -9,6 +9,22 @@
 class DearImguiDisplay: public glDisplay {
 
 public:
+
+	/**
+	 * Return the interface type (DearImguiDisplay::Type)
+	 */
+	virtual inline uint32_t GetType() const		{ return Type; }
+
+	/**
+	 * Unique type identifier of glDisplay class.
+	 */
+	static const uint32_t Type = (1 << 6);
+
+	virtual void SetMaximized(bool maximized);
+	virtual bool IsMaximized();
+	virtual void SetFullscreen(bool fullscreen);
+	virtual bool IsFullscreen();
+
 	DearImguiDisplay(const videoOptions& options) :glDisplay(options), render_cb_(0), uptr_(0) {
 		ImgPosAbs[0] = ImgPosAbs[1] = 0;
 	}
