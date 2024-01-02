@@ -217,8 +217,8 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 			//if(!interopTex) {
 			//}
 			glTexture* tex = PrepareImage(image, width, height, format, 0, 0, true);
-			ImGui::Begin("OpenGL Texture Text");
-			ImGui::Text("pointer = %p", tex);
+			ImGui::Begin("#main_image", nullptr, ImGuiWindowFlags_NoFocusOnAppearing|ImGuiWindowFlags_NoTitleBar);
+			//ImGui::Text("pointer = %p", tex);
 			ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));
 				bool isHovered = ImGui::IsItemHovered();
 				bool isFocused = ImGui::IsItemFocused();
