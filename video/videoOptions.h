@@ -127,6 +127,12 @@ public:
 	int latency;
 
 	/**
+	 * The minimum number of screen updates to wait for until the buffers are swapped by glfwSwapBuffers.
+	 * (0 - no VSync)
+	 */
+	int swapInterval;
+
+	/**
 	 * Min and Max exposure time (in case nvarguscamerasrc is used)
 	 */
 	int minExposureTime;

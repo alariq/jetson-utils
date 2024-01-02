@@ -32,6 +32,7 @@ videoOptions::videoOptions()
 {
 	width 	  = 0;
 	height 	  = 0;
+	swapInterval = 0;
 	frameRate   = 0;
 	frameCount  = 0;
 	bitRate     = 0;
@@ -81,6 +82,9 @@ void videoOptions::Print( const char* prefix ) const
 	
 	if( height != 0 )
 		LogInfo("  -- height:     %u\n", height);
+
+	if( ioType == OUTPUT && (deviceType == DEVICE_DISPLAY) )
+		LogInfo("  -- swapInterval:    %u\n", swapInterval);
 	
 	LogInfo("  -- frameRate:  %g\n", frameRate);
 
@@ -192,6 +196,8 @@ bool videoOptions::Parse( const char* URI, const commandLine& cmdLine, videoOpti
 
 	if( height == 0 )
 		height = cmdLine.GetUnsignedInt("height");
+
+	swapInterval = cmdLine.GetUnsignedInt("swap-interval");
 
 	// framerate
 	frameRate = (type == INPUT) ? cmdLine.GetFloat("input-rate", frameRate)

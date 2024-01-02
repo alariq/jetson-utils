@@ -248,22 +248,22 @@ public:
 	/**
 	 * Maximize or un-maximize the window.
 	 */
-	void SetMaximized( bool maximized );
+	virtual void SetMaximized( bool maximized );
 
 	/**
 	 * Determine if the window is maximized or not.
 	 */
-	bool IsMaximized();
+	virtual bool IsMaximized();
 	
 	/**
 	 * Set the window to fullscreen mode or not.
 	 */
-	void SetFullscreen( bool fullscreen );
+	virtual void SetFullscreen( bool fullscreen );
 	
 	/**
 	 * Determine if the window is fullscreen or not.
 	 */
-	bool IsFullscreen();
+	virtual bool IsFullscreen();
 
 	///@}
 
