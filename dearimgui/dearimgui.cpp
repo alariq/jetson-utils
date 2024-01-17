@@ -206,7 +206,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	//glDisplay::Render(image, width, height, format);
 	ImVec2 imgWinSize = ImVec2(0,0);
 	bool display_success = true;
-	if (image) {
+	if (image || last_rendered_image_) {
 
 		// determine input format
 		if (imageFormatIsRGB(format))
@@ -223,7 +223,13 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 			//glTexture* interopTex = allocTexture(width, height, format);
 			//if(!interopTex) {
 			//}
-			glTexture* tex = PrepareImage(image, width, height, format, 0, 0, true);
+
+			glTexture* tex = last_rendered_image_;
+			if(image) {
+				tex = PrepareImage(image, width, height, format, 0, 0, true);
+				last_rendered_image_ = tex;
+			}
+
 			ImGui::Begin("#main_image", nullptr, ImGuiWindowFlags_NoFocusOnAppearing|ImGuiWindowFlags_NoTitleBar);
 			//ImGui::Text("pointer = %p", tex);
 			ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));

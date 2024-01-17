@@ -52,4 +52,6 @@ private:
 	glDisplay::DragFinishedCallback_t drag_finished_cb_;
 	void* drag_cb_uptr_;
 	int mLastBBox[4];
+
+	glTexture* last_rendered_image_ = nullptr;
 };
