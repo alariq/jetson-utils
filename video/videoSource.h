@@ -366,7 +366,18 @@ public:
 	 * Convert a class type to a string.
 	 */
 	static const char* TypeToStr( uint32_t type );
-	
+
+	virtual bool SeekToTime(uint32_t ms) { return false;};
+	virtual bool SeekToFrame(uint32_t frame) { return false;};
+	virtual bool Pause(bool pause) { return false;};
+	virtual bool IsPaused() { return false; }
+	virtual int GetPosition() { return 0; } 
+	virtual int CalculateCurrentFrame() { return 0; }
+	virtual int64_t GetTimePosition() { return 0; }
+	virtual void SetTimePosition(int64_t ) { }
+	virtual int64_t GetFrameDuration() { return 0;  }
+	virtual int64_t GetDuration() { return 0;  }
+
 	/**
 	 * The default Capture timeout (1000ms)
 	 */

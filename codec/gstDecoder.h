@@ -124,11 +124,23 @@ public:
 	 */
 	static bool IsSupportedExtension( const char* ext );
 
+	virtual bool SeekToTime(uint32_t ms);
+	virtual bool SeekToFrame(uint32_t frame);
+	virtual bool Pause(bool pause);
+	virtual bool IsPaused();
+	virtual int GetFramePosition();
+	virtual int CalculateCurrentFrame();
+	virtual int64_t GetTimePosition();
+	virtual void SetTimePosition(int64_t pos);
+	virtual int64_t GetFrameDuration() { return mFrameDurationNanos; }
+	virtual int64_t GetDuration() { return mDurationNanos;  }
+
 protected:
 	gstDecoder( const videoOptions& options );
 	
 	void checkMsgBus();
 	void checkBuffer();
+	void checkBufferFromSample(GstSample* gstSample); //sebi
 	bool buildLaunchStr();
 	bool discover();
 	
@@ -157,6 +169,12 @@ protected:
 	bool		  mCustomRate;
 	bool        mEOS;
 	size_t	  mLoopCount;
+
+	//sebi
+	int64_t mDurationNanos;
+	int64_t mFrameDurationNanos;
+	float mNumTotalFrames;
+	//~
 		
 	gstBufferManager* mBufferManager;
 	

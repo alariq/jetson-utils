@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <strings.h>
+#include <math.h>
 
 
 // 
@@ -420,6 +421,8 @@ bool gstDecoder::discover()
 	const float framerate_num   = gst_discoverer_video_info_get_framerate_num(videoInfo);
 	const float framerate_denom = gst_discoverer_video_info_get_framerate_denom(videoInfo);
 	const float framerate       = framerate_num / framerate_denom;
+	// nanosec
+	mFrameDurationNanos = (int64_t)((framerate_denom / (double)framerate_num) * 1.0e9);
 
 	LogVerbose(LOG_GSTREAMER "gstDecoder -- discovered video resolution: %ux%u  (framerate %f Hz)\n", width, height, framerate);
 	
@@ -491,6 +494,7 @@ bool gstDecoder::discover()
 
 		return false;
 	}
+
 
 	// TODO free other resources
 	//g_free(discoverer);
@@ -765,12 +769,14 @@ GstFlowReturn gstDecoder::onPreroll( _GstAppSink* sink, void* user_data )
 	// onPreroll gets called sometimes, just pull and free the buffer
 	// otherwise the pipeline may hang during shutdown
 	GstSample* gstSample = gst_app_sink_pull_preroll(dec->mAppSink);
-	
+
 	if( !gstSample )
 	{
-		LogError(LOG_GSTREAMER "gstDecoder -- app_sink_pull_sample() returned NULL...\n");
+		LogError(LOG_GSTREAMER "gstDecoder -- app_sink_pull_preroll() returned NULL...\n");
 		return GST_FLOW_OK;
 	}
+
+	dec->checkBufferFromSample(gstSample);
 
 	gst_sample_unref(gstSample);
 #endif
@@ -884,6 +890,58 @@ void gstDecoder::checkBuffer()
 	release_return;
 }
 
+void gstDecoder::checkBufferFromSample(GstSample* gstSample)
+{
+	if( !mAppSink )
+		return;
+
+	if( !gstSample )
+	{
+		LogError(LOG_GSTREAMER "gstDecoder -- gstSample in NULL\n");
+		return;
+	}
+	
+	// retrieve sample caps
+	GstCaps* gstCaps = gst_sample_get_caps(gstSample);
+	
+	if( !gstCaps )
+	{
+		LogError(LOG_GSTREAMER "gstDecoder -- gst_sample had NULL caps...\n");
+	}
+	
+	// retrieve the buffer from the sample
+	GstBuffer* gstBuffer = gst_sample_get_buffer(gstSample);
+	
+	if( !gstBuffer )
+	{
+		LogError(LOG_GSTREAMER "gstDecoder -- app_sink_pull_sample() returned NULL...\n");
+	}
+	
+	const uint32_t width = mOptions.width;
+	const uint32_t height = mOptions.height;
+	
+	// enqueue the buffer for color conversion
+	if( !mBufferManager->Enqueue(gstBuffer, gstCaps) )
+	{
+		LogError(LOG_GSTREAMER "gstDecoder -- failed to handle incoming buffer\n");
+	}
+	
+	if( (width > 0 && width != mOptions.width) || (height > 0 && height != mOptions.height) )
+	{
+		LogWarning(LOG_GSTREAMER "gstDecoder -- resolution changing from (%ux%u) to (%ux%u)\n", width, height, mOptions.width, mOptions.height);
+		
+		// nvbufsurface: NvBufSurfaceCopy: buffer param mismatch
+		GstElement* vidconv = gst_bin_get_by_name(GST_BIN(mPipeline), "vidconv");
+		
+		if( vidconv != NULL )
+		{
+			gst_element_set_state(vidconv, GST_STATE_NULL);
+			gst_element_set_state(vidconv, GST_STATE_PLAYING);
+			gst_object_unref(vidconv);
+		}
+	}
+}
+
 
 #define RETURN_STATUS(code)  { if( status != NULL ) { *status=(code); } return ((code) == videoSource::OK ? true : false); }
 
@@ -916,7 +974,8 @@ bool gstDecoder::Capture( void** output, imageFormat format, uint64_t timeout, i
 	}
 	else if( result == 0 )
 	{
-		LogWarning(LOG_GSTREAMER "gstDecoder::Capture() -- a timeout occurred waiting for the next image buffer\n");
+		//sebi: ok if we are paused(actually instead of capture, app should subscribe to a new buffer, but ok...)
+		LogVerbose(LOG_GSTREAMER "gstDecoder::Capture() -- a timeout occurred waiting for the next image buffer\n");
 		RETURN_STATUS(TIMEOUT);
 	}
 		
@@ -1008,6 +1067,17 @@ bool gstDecoder::Open()
 	checkMsgBus();
 	usleep(100 * 1000);
 	checkMsgBus();
+
+	//sebi
+	if (!gst_element_query_duration(mPipeline, GST_FORMAT_TIME, &mDurationNanos))
+	{
+		LogWarning(LOG_GSTREAMER "gstDecoder -- Can't get duration\n");
+	} else {
+		mNumTotalFrames = (float)(mDurationNanos / (float)GST_SECOND) * mOptions.frameRate;
+		LogVerbose(LOG_GSTREAMER "gstDecoder -- Duration: %lu NumTotalFrames: %.2f\n", mDurationNanos, mNumTotalFrames);
+	}
+	//~
+
 
 	mStreaming = true;
 	return true;
@@ -1154,5 +1224,193 @@ void gstDecoder::onWebsocketMessage( WebRTCPeer* peer, const char* message, size
 	}
 	
 	gstWebRTC::onWebsocketMessage(peer, message, message_size, user_data);
+}
+
+bool gstDecoder::SeekToTime(uint32_t ms)
+{
+	uint64_t time_nanoseconds = ms;
+	time_nanoseconds *= 1000000;
+	if (!gst_element_seek(mPipeline, 1.0, GST_FORMAT_TIME, (GstSeekFlags)(GST_SEEK_FLAG_FLUSH|GST_SEEK_FLAG_ACCURATE|GST_SEEK_FLAG_SKIP),
+			GST_SEEK_TYPE_SET, time_nanoseconds,
+			GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+	{
+		LogError(LOG_GSTREAMER "Seek failed!\n");
+	}
+
+	GstMessage* asyncMsg = gst_bus_timed_pop_filtered(mBus, 5 * GST_SECOND,
+		(GstMessageType)(GST_MESSAGE_ASYNC_DONE | GST_MESSAGE_ERROR));
+
+	if (asyncMsg != NULL)
+	{
+		gst_message_print(mBus, asyncMsg, this);
+		gst_message_unref(asyncMsg);
+	}
+	else
+	{
+		LogInfo(LOG_GSTREAMER "gstCamera NULL message after transitioning pipeline to PLAYING...\n");
+	}
+
+	GstState state;
+	gst_element_get_state(mPipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+	LogInfo(LOG_GSTREAMER "Seek, state after seek: %d\n", state);
+
+	return true;
+}
+
+bool gstDecoder::SeekToFrame(uint32_t frame)
+{
+	LogInfo(LOG_GSTREAMER "Seek to frame: %d\n", frame);
+	if (!gst_element_seek(mPipeline, 1.0, GST_FORMAT_BUFFERS, (GstSeekFlags)(GST_SEEK_FLAG_FLUSH|GST_SEEK_FLAG_SKIP),
+			GST_SEEK_TYPE_SET, 0,
+			GST_SEEK_TYPE_SET, frame))
+	{
+		LogError(LOG_GSTREAMER "Seek failed!\n");
+	}
+
+	GstMessage* asyncMsg = gst_bus_timed_pop_filtered(mBus, 5 * GST_SECOND,
+		(GstMessageType)(GST_MESSAGE_ASYNC_DONE | GST_MESSAGE_ERROR));
+
+	if (asyncMsg != NULL)
+	{
+		gst_message_print(mBus, asyncMsg, this);
+		gst_message_unref(asyncMsg);
+	}
+	else
+	{
+		LogInfo(LOG_GSTREAMER "gstCamera NULL message after transitioning pipeline to PLAYING...\n");
+	}
+
+	GstState state;
+	gst_element_get_state(mPipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+	LogInfo(LOG_GSTREAMER "Seek, state after seek: %d\n", state);
+
+	return true;
+}
+
+bool gstDecoder::Pause(bool pause)
+{
+	GstState state;
+	GstClockTime timeout = 33000; //33ms
+	gst_element_get_state(mPipeline, &state, nullptr, timeout);
+	LogInfo(LOG_GSTREAMER "Pause: get state: %d\n", state);
+
+	GstStateChangeReturn rv = GST_STATE_CHANGE_SUCCESS;
+	if(pause && state != GST_STATE_PAUSED)
+	{
+		rv = gst_element_set_state(mPipeline, GST_STATE_PAUSED);
+		LogInfo(LOG_GSTREAMER "state change res: %d\n", rv);
+	}
+	else if(!pause && state != GST_STATE_PLAYING)
+	{
+		rv = gst_element_set_state(mPipeline, GST_STATE_PLAYING);
+		LogInfo(LOG_GSTREAMER "state change res: %d\n", rv);
+	}
+
+	if(rv == GST_STATE_CHANGE_ASYNC) {
+		LogInfo(LOG_GSTREAMER "async, waiting\n");
+		while(GST_STATE_CHANGE_ASYNC == gst_element_get_state(mPipeline, &state, nullptr, timeout)) {
+			LogInfo(LOG_GSTREAMER "async, waiting\n");
+		}
+		LogInfo(LOG_GSTREAMER "exit get state res: %d\n", state);
+	} else {
+		gst_element_get_state(mPipeline, &state, nullptr, timeout);
+		LogInfo(LOG_GSTREAMER "exit get state res: %d\n", state);
+	}
+
+	return rv == GST_STATE_CHANGE_SUCCESS;
+}
+
+bool gstDecoder::IsPaused()
+{
+	GstState state;
+	GstClockTime timeout = 33000; //33ms
+	gst_element_get_state(mPipeline, &state, nullptr, timeout);
+	return state == GST_STATE_PAUSED;
+}
+
+int gstDecoder::GetFramePosition()
+{
+	GstQuery* query;
+	gboolean res;
+	gint64 pos = 0;
+	query = gst_query_new_position(GST_FORMAT_DEFAULT);
+	if(gst_element_query(mPipeline, query))
+	{
+		GstFormat fmt;
+		gst_query_parse_position(query, &fmt, &pos);
+		//LogInfo(LOG_GSTREAMER "position: %d (format: %d)\n", (int)pos, fmt);
+	}
+
+	gst_query_unref(query);
+	return (int)pos;
+}
+
+int64_t gstDecoder::GetTimePosition()
+{
+	GstQuery* query;
+	gboolean res;
+	gint64 pos;
+	query = gst_query_new_position(GST_FORMAT_TIME);
+	if(gst_element_query(mPipeline, query))
+	{
+		GstFormat fmt;
+		gst_query_parse_position(query, &fmt, &pos);
+	}
+
+	gst_query_unref(query);
+	return pos;
+}
+
+void gstDecoder::SetTimePosition(int64_t pos)
+{
+	GstSeekFlags flags = (GstSeekFlags)(GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE);
+	if (!gst_element_seek(mPipeline, 1.0, GST_FORMAT_TIME, flags,
+			GST_SEEK_TYPE_SET, pos,
+			GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE))
+	{
+		LogError(LOG_GSTREAMER "Seek failed!\n");
+		return;
+	}
+#if 1 // wait for async done message as seek can be an async operation
+	GstMessage* asyncMsg = gst_bus_timed_pop_filtered(mBus, 5 * GST_SECOND,
+		(GstMessageType)(GST_MESSAGE_ASYNC_DONE | GST_MESSAGE_ERROR));
+	if (asyncMsg != NULL) {
+		gst_message_print(mBus, asyncMsg, this);
+		gst_message_unref(asyncMsg);
+	} else {
+		LogInfo(LOG_GSTREAMER "gstDecoder NULL message after seek...\n");
+	}
+#endif
+
+	// also just in case get state (this will block in case of pending state updates)
+	// to make sure all pending transitions have finished
+	GstState state;
+	gst_element_get_state(mPipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+	LogVerbose(LOG_GSTREAMER "Seek, state after seek: %d\n", state);
+}
+
+
+int gstDecoder::CalculateCurrentFrame() {
+
+	GstQuery* query;
+	gboolean res;
+	int frame = 0;
+	query = gst_query_new_position(GST_FORMAT_TIME);
+	if(gst_element_query(mPipeline, query))
+	{
+		gint64 pos;
+		GstFormat fmt;
+		gst_query_parse_position(query, &fmt, &pos);
+
+		float fr = mOptions.frameRate * (float)((double)pos / GST_SECOND);
+		float fr2 = mOptions.frameRate * (float)((float)pos / GST_SECOND);
+		if(fabsf(fr - fr2) > 0.1f) {
+			LogError(LOG_GSTREAMER "double / float inconsistence fr: %.3f fr2: %.3f\n", fr, fr2);
+		}
+		frame = (int)(fr + 0.5f);
+	}
+
+	gst_query_unref(query);
+	return frame;
 }
 
