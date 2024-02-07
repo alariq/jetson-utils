@@ -42,6 +42,7 @@ gstCamera::gstCamera( const videoOptions& options ) : videoSource(options)
 	mBus       = NULL;
 	mPipeline  = NULL;	
 	mFormatYUV = IMAGE_UNKNOWN;
+	mEOS       = false;
 	
 	mBufferManager = new gstBufferManager(&mOptions);
 }
@@ -643,7 +644,11 @@ bool gstCamera::init()
 // onEOS
 void gstCamera::onEOS(_GstAppSink* sink, void* user_data)
 {
-	LogWarning(LOG_GSTREAMER "gstCamera -- end of stream (EOS)\n");
+	bool is_eos = gst_app_sink_is_eos(sink);
+	LogWarning(LOG_GSTREAMER "gstCamera -- end of stream (EOS) is_eos: %d\n", is_eos);
+	// happens when there is some stall/timeout, not clear
+	gstCamera* dec = (gstCamera*)user_data;
+	dec->mEOS = true;
 }
 
 // onPreroll
@@ -727,11 +732,15 @@ bool gstCamera::Capture( void** output, imageFormat format, uint64_t timeout, in
 	if( !output )
 		RETURN_STATUS(ERROR);
 
+	if(mEOS)
+		RETURN_STATUS(EOS);
+
 	// confirm the camera is streaming
-	if( !mStreaming )
+	//if( !mStreaming || mEOS )
+	if( !mStreaming)
 	{
 		if( !Open() )
-			RETURN_STATUS(ERROR);
+			RETURN_STATUS(mEOS ? EOS : ERROR);
 	}
 
 	// wait until a new frame is recieved
@@ -765,8 +774,18 @@ bool gstCamera::CaptureRGBA( float** output, unsigned long timeout, bool zeroCop
 // Open
 bool gstCamera::Open()
 {
-	if( mStreaming )
+	if( mStreaming && !mEOS)
 		return true;
+
+
+	if(mEOS) {
+		LogInfo(LOG_GSTREAMER "EOS: transitioning pipeline to GST_STATE_NULL\n");
+		const GstStateChangeReturn result = gst_element_set_state(mPipeline, GST_STATE_NULL);
+		if(result != GST_STATE_CHANGE_SUCCESS && result != GST_STATE_CHANGE_ASYNC) {
+			return -1;
+		}
+		mEOS = false;
+	}
 
 	// transition pipline to STATE_PLAYING
 	LogInfo(LOG_GSTREAMER "opening gstCamera for streaming, transitioning pipeline to GST_STATE_PLAYING\n");
@@ -814,7 +833,7 @@ void gstCamera::Close()
 	const GstStateChangeReturn result = gst_element_set_state(mPipeline, GST_STATE_NULL);
 
 	if( result != GST_STATE_CHANGE_SUCCESS )
-		LogError(LOG_GSTREAMER "gstCamera failed to set pipeline state to PLAYING (error %u)\n", result);
+		LogError(LOG_GSTREAMER "gstCamera failed to set pipeline state to NULL (error %u)\n", result);
 
 	usleep(250*1000);	
 	checkMsgBus();

@@ -222,6 +222,7 @@ private:
 	_GstBus*     mBus;
 	_GstAppSink* mAppSink;
 	_GstElement* mPipeline;
+	bool        mEOS;
 
 	std::string  mLaunchStr;
 	imageFormat  mFormatYUV;
