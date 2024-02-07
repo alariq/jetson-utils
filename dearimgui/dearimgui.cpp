@@ -9,6 +9,8 @@
 #include "imgui_impl_opengl3.h"
 #include "implot.h"
 
+#include <stdint.h>
+
 #include <GLFW/glfw3.h>
 
 extern uint32_t glAddDisplay(glDisplay* display);
