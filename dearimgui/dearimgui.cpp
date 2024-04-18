@@ -71,6 +71,9 @@ bool DearImguiDisplay::Init()
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(mOptions.swapInterval);
 
+	glfwSetKeyCallback(glfwWindow_, keyCallback);
+	glfwSetWindowUserPointer(glfwWindow_, this);
+
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -110,6 +113,14 @@ bool DearImguiDisplay::Init()
 	LogInfo(LOG_GL "ImGuiDisplay -- display device initialized (%ux%u)\n", GetWidth(), GetHeight());
 
 	return true;
+}
+
+void DearImguiDisplay::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	DearImguiDisplay* me = (DearImguiDisplay*)glfwGetWindowUserPointer(window);
+	if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+		me->mImmersionMode = !me->mImmersionMode;
+	}
 }
 
 bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imageFormat format)
@@ -153,7 +164,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	if(RMB_Down && mMouseDragOrigin[0] >=0 && mMouseDragOrigin[1] >=0) {
 		mMouseDrag[0] = mMousePos[0];
 		mMouseDrag[1] = mMousePos[1];
-		LogInfo(LOG_GL "Current Drag pos x: %d y: %d\n", mMouseDrag[0], mMouseDrag[1]);
+		LogDebug(LOG_GL "Current Drag pos x: %d y: %d W: %d H: %d\n", mMouseDrag[0], mMouseDrag[1], mOptions.width, mOptions.height);
 	}
 
 	const bool bDragFinished = mMouseButtons[MOUSE_RIGHT] && !RMB_Down;
@@ -232,16 +243,34 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 				last_rendered_image_ = tex;
 			}
 
-			ImGui::Begin("#main_image", nullptr, ImGuiWindowFlags_NoFocusOnAppearing|ImGuiWindowFlags_NoTitleBar);
-			//ImGui::Text("pointer = %p", tex);
-			ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));
+			if (!mImmersionMode) {
+				ImGui::Begin("#main_image", nullptr, ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoTitleBar);
+				//ImGui::Text("pointer = %p", tex);
+				ImGui::Image((void*)(intptr_t)tex->GetID(), ImVec2(tex->GetWidth(), tex->GetHeight()));
 				bool isHovered = ImGui::IsItemHovered();
 				bool isFocused = ImGui::IsItemFocused();
 				ImVec2 winPos = ImGui::GetItemRectMin();
 				imgWinSize = ImGui::GetItemRectSize();
 				ImgPosAbs[0] = (int)winPos.x;
 				ImgPosAbs[1] = (int)winPos.y;
-			ImGui::End();
+				ImGui::End();
+			} else {
+				// to not hide menu bar, more correct will be to use GetWindowSize() while inside Menu bar drawing,
+				// because it wll account for style.DisplaySafeAreaPadding (may be useful for TV sets), but menu drawing
+				// is not happening here, probably need to rework this part, so main image is also happens on a "client" side
+				// by just calling some function like get_image_id()
+				float fh = ImGui::GetFrameHeight();
+
+				ImVec2 pos = ImGui::GetMainViewport()->Pos;
+				ImVec2 size = ImGui::GetMainViewport()->Size;
+				ImVec2 minp = ImVec2(pos.x, pos.y + fh);
+				ImVec2 maxp = ImVec2(pos.x + size.x, pos.y + size.y);
+				ImGui::GetForegroundDrawList()->AddImage((void*)(intptr_t)tex->GetID(), minp, maxp);
+
+				imgWinSize = ImVec2(maxp.x - minp.x, maxp.y - minp.y);
+				ImgPosAbs[0] = (int)minp.x;
+				ImgPosAbs[1] = (int)minp.y;
+			}
 
 		} else {
 			LogError(LOG_GL "glDisplay::Render() -- unsupported image format (%s)\n", imageFormatToStr(format));
@@ -254,7 +283,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 		}
 	}
 
-	if(render_cb_) {
+	if(render_cb_ /*&& !mImmersionMode*/) {
 		render_cb_(uptr_);
 	}
 
@@ -270,6 +299,13 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	const bool substreams_success = videoOutput::Render(image, width, height, format);
 
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+	// update viewport
+	mOptions.width = display_w;
+	mOptions.height = display_h;
+	mViewport[2] = mOptions.width;
+	mViewport[3] = mOptions.height;
+	SetViewport(0, 0, display_w, display_h);
 
 	activateViewport();
 	if( (mDragMode == DragSelect || mDragMode == DragCreate) && IsDragging(mDragMode) )
@@ -306,7 +342,13 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 			bbX1 = std::min(bbX1, wX1);
 			bbY1 = std::min(bbY1, wY1);
 			// relative to the image widow
-			drag_finished_cb_(bbX0 - wX0, bbY0 - wY0, bbX1 - bbX0, bbY1 - bbY0, drag_cb_uptr_);
+			// and in relative coordinates because aspect/size 
+			// can be different on remote
+			float x = (bbX0 - wX0) / (float)imgWinSize.x;
+			float y = (bbY0 - wY0) / (float)imgWinSize.y;
+			float w = (bbX1 - bbX0) / (float)imgWinSize.x;
+			float h = (bbY1 - bbY0) / (float)imgWinSize.y;
+			drag_finished_cb_(x, y, w, h, drag_cb_uptr_);
 		}	
 	}
 

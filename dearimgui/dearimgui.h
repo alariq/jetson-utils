@@ -42,6 +42,8 @@ public:
 		drag_cb_uptr_ = user_ptr;
 	}
 
+	static void keyCallback(struct GLFWwindow* window, int key, int scancode, int action, int mods);
+
 private:
 	bool Init();
 	struct GLFWwindow* glfwWindow_;
@@ -52,6 +54,8 @@ private:
 	glDisplay::DragFinishedCallback_t drag_finished_cb_;
 	void* drag_cb_uptr_;
 	int mLastBBox[4];
+
+	bool mImmersionMode = false;
 
 	glTexture* last_rendered_image_ = nullptr;
 };

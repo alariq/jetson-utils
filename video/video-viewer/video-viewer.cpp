@@ -23,6 +23,8 @@
 #include "videoSource.h"
 #include "videoOutput.h"
 
+#include "glDisplay.h"
+
 #include "logging.h"
 #include "commandLine.h"
 
@@ -54,6 +56,10 @@ int usage()
 	printf("%s", Log::Usage());
 
 	return 0;
+}
+
+void OnDragFinished(float rx, float ry, float rw, float rh, void* user_ptr) {
+	printf("bbox X: %.2f Y: %.2f W: %.2f H: %.2f\n", rx, ry, rw, rh);
 }
 
 int main( int argc, char** argv )
@@ -90,6 +96,8 @@ int main( int argc, char** argv )
 	 * create output video stream
 	 */
 	videoOutput* output = videoOutput::Create(cmdLine, ARG_POSITION(1));
+	((glDisplay*)output)->SetDragMode(glDisplay::DragSelect);
+	((glDisplay*)output)->SetDragFinishedCallback(OnDragFinished, nullptr);
 	
 	if( !output )
 	{

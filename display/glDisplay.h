@@ -531,7 +531,7 @@ public:
 	 */
 	bool GetDragCoords( int* x1, int* y1, int* x2, int* y2 );
 
-	typedef void (*DragFinishedCallback_t)(int x, int y, int w, int h, void* ptr);
+	typedef void (*DragFinishedCallback_t)(float x, float y, float w, float h, void* ptr);
 	virtual void SetDragFinishedCallback(DragFinishedCallback_t drag_finished_cb_, void* user_ptr) {}
 
 	///@}
