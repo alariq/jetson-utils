@@ -453,7 +453,8 @@ bool cudaFont::OverlayText( void* image, imageFormat format, uint32_t width, uin
 		{
 			char c = strings[s].first[n];
 			
-			if( c < FirstGlyph || c > LastGlyph )
+			//seib: c > LastGlyph c cannot be more than 255 which is LastGlyph
+			if( c < FirstGlyph /*|| c > LastGlyph*/ )
 				continue;
 			
 			c -= FirstGlyph;
