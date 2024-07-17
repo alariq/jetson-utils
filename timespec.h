@@ -154,11 +154,15 @@ inline float timeFloat( const timespec& a )								{ return a.tv_sec * 1000.0f +
  */
 inline double timeDouble( const timespec& a )							{ return a.tv_sec * 1000.0 + a.tv_nsec * 0.000001; }
 
+inline uint64_t timeNs( const timespec& a )							     { return a.tv_nsec + a.tv_sec * 1000000000ull; }
+
 /**
  * Get current timestamp as 64-bit double (in milliseconds).
  * @ingroup time
  */
 inline double timeDouble()											{ return timeDouble(timestamp()); }
+
+inline uint64_t timeNs()                                                        { return timeNs(timestamp()); }
 
 /**
  * Produce a text representation of the timestamp.
@@ -202,6 +206,39 @@ inline void sleepUs( uint64_t microseconds )								{ sleepTime(timeNew(0, micro
  */
 inline void sleepNs( uint64_t nanoseconds )								{ sleepTime(timeNew(0, nanoseconds)); }
 
+
+struct ScopedTimer {
+	timespec s;
+    const char* label;
+    static int ident;
+    ScopedTimer(const char* l) {
+        label = l;
+        s = timestamp();
+        ident++;
+    }
+
+    ~ScopedTimer() {
+	    float dt = timeFloat(timeDiff(s, timestamp()));
+	    for(int i=0;i<ident;i++) {
+		    LogDebug(" ");
+	    }
+	    LogDebug("%s = %.3fms\n", label, dt);
+	    ident--;
+    }
+
+};
+
+#define PREPROCESSOR_JOIN_FIRST_INNER(x, ...) x##__VA_ARGS__
+#define PREPROCESSOR_JOIN_FIRST(x, ...) PREPROCESSOR_JOIN_FIRST_INNER(x, __VA_ARGS__)
+#define PREPROCESSOR_JOIN_INNER(x, y) x##y
+#define PREPROCESSOR_JOIN(x, y) PREPROCESSOR_JOIN_INNER(x, y)
+
+#define WITH_TIMING
+#if defined(WITH_TIMING)
+#define SCOPED_TIMER(name) ScopedTimer PREPROCESSOR_JOIN(CpuTimeProfilingId__, __LINE__)(name)
+#else
+#define SCOPED_TIMER(name)
+#endif
 
 #endif
 
