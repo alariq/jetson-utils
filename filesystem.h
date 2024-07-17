@@ -68,11 +68,18 @@ std::string locateFile( const std::string& path );
 std::string locateFile( const std::string& path, std::vector<std::string>& locations );
 
 /**
- * Loads a binary file into a buffer that it allocates.
+ * Loads a file into a buffer that it allocates.
+ * mode - by default will use 'rb' (binary file)
  * @return the size in bytes read (or 0 on error)
  * @ingroup filesystem
  */
-size_t loadFile( const std::string& path, void** buffer );
+size_t loadFile( const std::string& path, void** buffer, const char* mode = nullptr );
+
+/**
+ * Frees memory which was allocated by loadFile call
+ * @ingroup filesystem
+ */
+void freeFile( void* buffer );
 
 /**
  * Read a text file into a string.  It's assumed that the file is text, and that it is of a

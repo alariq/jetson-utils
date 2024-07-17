@@ -91,7 +91,7 @@ std::string locateFile( const std::string& path, std::vector<std::string>& locat
 
 
 // loadFile
-size_t loadFile( const std::string& path, void** bufferOut )
+size_t loadFile( const std::string& path, void** bufferOut, const char* mode)
 {
 	// determine the file size
 	const size_t file_size = fileSize(path);
@@ -109,7 +109,7 @@ size_t loadFile( const std::string& path, void** bufferOut )
 	}
 
 	// read the file
-	FILE* file = fopen(path.c_str(), "rb");
+	FILE* file = fopen(path.c_str(), mode ? mode : "rb");
 
 	if( !file )
 	{
@@ -134,6 +134,11 @@ size_t loadFile( const std::string& path, void** bufferOut )
 		*bufferOut = buffer;
 
 	return bytes_read;
+}
+
+void freeFile( void* buffer )
+{
+	free(buffer);
 }
 
 
