@@ -388,8 +388,41 @@ bool gstCamera::parseCaps( GstStructure* caps, videoOptions::Codec* _codec, imag
 	int width  = 0;
 	int height = 0;
 	
-	if( !gst_structure_get_int(caps, "width", &width) || !gst_structure_get_int(caps, "height", &height) )
-		return false;
+	if( !gst_structure_get_int(caps, "width", &width) || !gst_structure_get_int(caps, "height", &height) ) {
+		// have several values for width/height, let's parse them
+		const GValue* w_val = gst_structure_get_value(caps, "width");
+		const GValue* h_val = gst_structure_get_value(caps, "height");
+		if(!w_val || !h_val)
+			return false;
+
+		int w_min = gst_value_get_int_range_min(w_val);
+		int w_max = gst_value_get_int_range_max(w_val);
+		int w_step = gst_value_get_int_range_step(w_val);
+		LogVerbose("width min: %d max: %d step: %d\n", w_min, w_max, w_step);
+
+		int h_min = gst_value_get_int_range_min(h_val);
+		int h_max = gst_value_get_int_range_max(h_val);
+		int h_step = gst_value_get_int_range_step(h_val);
+		LogVerbose("height min: %d max: %d step: %d\n", h_min, h_max, h_step);
+
+		int best = w_min;
+		int diff = abs(best - *(int*)_width);
+		for(int w = w_min; w<=w_max; w+= w_step) {
+			if( abs(w - *(int*)_width) < abs(best - *(int*)_width)) {
+				best = w;
+			}
+		}
+		width = best;
+
+		best = h_min;
+		diff = abs(best - *(int*)_height);
+		for(int h = h_min; h<=h_max; h+= h_step) {
+			if( abs(h - *(int*)_height) < abs(best - *(int*)_height)) {
+				best = h;
+			}
+		}
+		height = best;
+	}
 
 	// get highest framerate
 	int frameRateNum = 0;
@@ -416,6 +449,30 @@ bool gstCamera::parseCaps( GstStructure* caps, videoOptions::Codec* _codec, imag
 
 					if( frameRateNum > 0 && frameRateDenom > 0 )
 						frameRates.push_back(float(frameRateNum) / float(frameRateDenom));
+				}
+			}
+		} else { // try ranges
+			const GValue* f_val = gst_structure_get_value(caps, "framerate");
+			if(f_val) {
+				const GValue* f_min = gst_value_get_fraction_range_min(f_val);
+				const GValue* f_max = gst_value_get_fraction_range_max(f_val);
+
+				if( GST_VALUE_HOLDS_FRACTION(f_min) && GST_VALUE_HOLDS_FRACTION(f_max) ) {
+
+					int frameRateNumMin = gst_value_get_fraction_numerator(f_min);
+					int frameRateDenomMin = gst_value_get_fraction_denominator(f_min);
+					int frameRateNumMax = gst_value_get_fraction_numerator(f_max);
+					int frameRateDenomMax = gst_value_get_fraction_denominator(f_max);
+
+					LogVerbose("framerate min: %d/%d max: %d/%d\n", frameRateNumMin, frameRateDenomMin, frameRateNumMax, frameRateDenomMax);
+
+					// should just add min and max values?
+					for( uint32_t d=frameRateDenomMin; d <= frameRateDenomMax; d++) {
+						for( uint32_t n=frameRateNumMin; n <= frameRateNumMax; n++) {
+							if( n > 0 && d > 0 )
+								frameRates.push_back(float(n) / float(d));
+						}
+					}
 				}
 			}
 		}
@@ -453,7 +510,8 @@ bool gstCamera::matchCaps( GstCaps* device_caps )
 		
 		videoOptions::Codec codec;
 		imageFormat format;
-		uint32_t width, height;
+		uint32_t width = mOptions.width;
+		uint32_t height = mOptions.height;
 		float frameRate = mOptions.frameRate;
 
 		if( !parseCaps(caps, &codec, &format, &width, &height, &frameRate) )
