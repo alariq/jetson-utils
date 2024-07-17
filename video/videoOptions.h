@@ -284,6 +284,11 @@ public:
 	 *   `openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem -days 365`
 	 */
 	std::string sslKey;
+
+	/**
+	 * Extra arguments to pass to v4l2 (if v4lsrc is used)
+	 */
+	std::string extra_controls;
 	
 	/**
 	 * Log the video settings, with an optional prefix label.

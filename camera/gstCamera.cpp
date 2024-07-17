@@ -184,7 +184,14 @@ bool gstCamera::buildLaunchStr()
 	}
 	else
 	{
-		ss << "v4l2src device=" << mOptions.resource.location << " do-timestamp=true ! ";
+		ss << "v4l2src device=" << mOptions.resource.location;
+
+		// add custom supplied parameters if any
+		if(mOptions.extra_controls.size()) {
+			ss << " extra-controls=\"" << mOptions.extra_controls << "\" ";
+		}
+
+		ss << " do-timestamp=true ! ";
 		
 		if( mOptions.codec != videoOptions::CODEC_UNKNOWN )
 		{

@@ -274,6 +274,11 @@ bool videoOptions::Parse( const char* URI, const commandLine& cmdLine, videoOpti
 	if( certStr )
 		sslCert = certStr;
 
+	const char* extraV4LControls = cmdLine.GetString("extra-v4l-controls");
+	if(extraV4LControls) {
+		extra_controls = extraV4LControls;
+	}
+
 	return true;
 }
 
