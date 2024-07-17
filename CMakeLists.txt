@@ -5,6 +5,8 @@ cmake_minimum_required(VERSION 2.8)
 # or if it's being build standalone (if the later, we need to do some configuration)
 get_directory_property(hasParent PARENT_DIRECTORY)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 if(hasParent)
 	message("-- jetson-utils:  building as submodule, ${hasParent}")
 else()
@@ -15,6 +17,8 @@ else()
   
 	# -std=gnu++11
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wno-write-strings")	
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -ggdb")	
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O2")	
   
 	# setup CUDA
 	set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cuda")
@@ -65,7 +69,8 @@ else()
 
 	# build C/C++ interface
 	include_directories(${PROJECT_INCLUDE_DIR})
-	#include_directories(/usr/include/gstreamer-1.0 /usr/lib/aarch64-linux-gnu/gstreamer-1.0/include /usr/include/glib-2.0 /usr/include/libxml2 /usr/lib/aarch64-linux-gnu/glib-2.0/include/)
+    #include_directories(/usr/include/gstreamer-1.0 /usr/lib/aarch64-linux-gnu/gstreamer-1.0/include /usr/include/glib-2.0 /usr/include/libxml2 /usr/lib/aarch64-linux-gnu/glib-2.0/include/)
+    include_directories(/usr/lib/glib-2.0/include/)
 
 endif()
 
@@ -96,29 +101,115 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
 endif()
 
 # build library
-file(GLOB jetsonUtilitySources *.cpp camera/*.cpp codec/*.cpp cuda/*.cu cuda/*.cpp display/*.cpp image/*.cpp input/*.cpp network/*.cpp threads/*.cpp video/*.cpp)
-file(GLOB jetsonUtilityIncludes *.h *.hpp camera/*.h codec/*.h cuda/*.h cuda/*.cuh display/*.h image/*.h image/*.inl input/*.h network/*.h threads/*.h threads/*.inl video/*.h)
+#file(GLOB jetsonUtilitySources *.cpp camera/*.cpp codec/*.cpp display/*.cpp image/*.cpp input/*.cpp network/*.cpp threads/*.cpp video/*.cpp)
+file(GLOB jetsonUtilitySources *.cpp camera/*.cpp codec/*.cpp image/*.cpp input/*.cpp network/*.cpp threads/*.cpp video/*.cpp)
+file(GLOB jetsonUtilityIncludes *.h *.hpp camera/*.h codec/*.h display/*.h image/*.h image/*.inl input/*.h network/*.h threads/*.h threads/*.inl video/*.h)
 
+option(WITH_CUDA "With CUDA support" ON)
+option(WITH_OPENCL "With OpenCL support" OFF)
 option(WITH_IMGUI "Enable dear imgui support" TRUE)
+option(WITH_DRM "Enable DRM rendering support" TRUE)
+option(WITH_DISPLAY "Use OpenGL based display output" TRUE)
+option(USE_OPENGL_ES2 "Use OpenGL ES2 instead of OpenGL" FALSE)
+
+#set(WITH_DISPLAY OFF)
+
+find_library(GL_LIB NAMES GL)
+find_library(GLU_LIB NAMES GLU)
+find_library(GLES2_LIB NAMES GLESv2)
+find_library(GLEW_LIB NAMES GLEW)
+
+if(${USE_OPENGL_ES2})
+    set(OPENGL_LIBRARY ${GLES2_LIB})
+    add_definitions(-DUSE_OPENGL_ES2)
+else()
+    set(OPENGL_LIBRARY ${GL_LIB})
+endif()
+
+if(${WITH_DISPLAY})
+    message(STATUS "Display is enabled")
+    add_definitions(-DWITH_DISPLAY=1)
+    #find_package(glfw3 REQUIRED)
+    file(GLOB jetsonUtilitySourcesDisplay display/*.cpp)
+    list(APPEND jetsonUtilitySources  ${jetsonUtilitySourcesDisplay})
+    if(${WITH_IMGUI})
+        list(APPEND jetsonUtilitySources  dearimgui/dearimgui.cpp)
+        list(APPEND jetsonUtilityIncludes dearimgui/dearimgui.h)
+    endif()
+endif()
+
+if(${WITH_CUDA})
+    message(STATUS "CUDA is enabled")
+    add_definitions(-DWITH_CUDA=1)
+    file(GLOB jetsonUtilitySourcesCuda cuda/*.cpp cuda/*.cu)
+    file(GLOB jetsonUtilityIncludesCuda cuda/*.h cuda/*.cuh)
+    list(APPEND jetsonUtilitySources  ${jetsonUtilitySourcesCuda})
+    list(APPEND jetsonUtilityIncludes ${jetsonUtilityIncludesCuda})
+endif(${WITH_CUDA})
+
+if(${WITH_OPENCL})
+    find_package(OpenCL)
+    add_subdirectory("ocl")
+    include_directories(${OpenCV_INCLUDE_DIRS})
+    message(STATUS OpenCL_LIBS=${OpenCL_LIBRARY})
+
+    add_definitions(-DWITH_OPENCL=1)
+    add_definitions(-DCL_TARGET_OPENCL_VERSION=300)
+    file(GLOB jetsonUtilitySourcesOCL opencl/*.cpp ocl/*.cpp)
+    file(GLOB jetsonUtilityIncludesOCL opencl/*.h opencl/*.cl ocl/*.h)
+    list(APPEND jetsonUtilitySources  ${jetsonUtilitySourcesOCL})
+    list(APPEND jetsonUtilityIncludes ${jetsonUtilityIncludesOCL})
+endif(${WITH_OPENCL})
+
 
 if(WITH_IMGUI)
-	find_package(glfw3 REQUIRED)
 
 	add_definitions(-DWITH_IMGUI)
-	file(GLOB IMGUI_SRC dearimgui/dearimgui.cpp imgui/*.cpp imgui/backends/imgui_impl_opengl3.cpp imgui/backends/imgui_impl_glfw.cpp)
-	file(GLOB IMGUI_INC dearimgui/dearimgui.h imgui/*.h imgui/backends/imgui_impl_opengl3.h imgui/backends/imgui_impl_glfw.h)
+    #might need this to be visible from client code
+
+    if(${USE_OPENGL_ES2})
+        add_definitions(-DIMGUI_IMPL_OPENGL_ES2)
+    endif()
+
+	file(GLOB IMGUI_SRC imgui/*.cpp imgui/backends/imgui_impl_opengl3.cpp imgui/backends/imgui_impl_glfw.cpp)
+	file(GLOB IMGUI_INC imgui/*.h imgui/backends/imgui_impl_opengl3.h imgui/backends/imgui_impl_glfw.h)
 
     # implot
     set(IMGUI_SRC  ${IMGUI_SRC} implot/implot.cpp implot/implot_items.cpp implot/implot_demo.cpp)
     set(IMGUI_INC ${IMGUI_INC} implot/implot.h implot/implot_internal.h)
 
+
 	list(APPEND jetsonUtilitySources  ${IMGUI_SRC})
 	list(APPEND jetsonUtilityIncludes  ${IMGUI_INC})
 endif()
 
+if(WITH_DRM)
+    find_library(DRM_LIB NAMES drm)
+    find_library(EGL_LIB NAMES EGL)
+    find_library(GBM_LIB NAMES gbm)
+    find_path(DRM_INCLUDE_DIR NAME drm.h PATHS /usr/include/libdrm /usr/include/drm)
+    find_path(GBM_INCLUDE_DIR NAME gbm.h PATHS /usr/include)
 
-cuda_add_library(jetson-utils SHARED ${jetsonUtilitySources})
-target_link_libraries(jetson-utils GL GLU GLEW gstreamer-1.0 gstapp-1.0 gstpbutils-1.0 gstwebrtc-1.0 gstsdp-1.0 gstrtspserver-1.0 json-glib-1.0 soup-2.4 ${CUDA_nppicc_LIBRARY})	
+    add_definitions(-DWITH_DRM)
+    include_directories(${DRM_INCLUDE_DIR})
+    include_directories(${GBM_INCLUDE_DIR})
+
+    file(GLOB DRM_SRC drm/*.cpp drm/drmlib/*.c)
+    file(GLOB DRM_INC drm/*.h)
+
+    list(APPEND jetsonUtilitySources  ${DRM_SRC})
+    list(APPEND jetsonUtilityIncludes  ${DRM_INC})
+endif()
+
+if(WITH_CUDA)
+    cuda_add_library(jetson-utils SHARED ${jetsonUtilitySources})
+    target_compile_definitions(jetson-utils PUBLIC "-DWITH_CUDA=1")
+else()
+    add_library(jetson-utils SHARED ${jetsonUtilitySources})
+endif()
+
+#target_link_libraries(jetson-utils GL GLU GLEW gstreamer-1.0 gstapp-1.0 gstpbutils-1.0 gstwebrtc-1.0 gstsdp-1.0 gstrtspserver-1.0 json-glib-1.0 soup-2.4 ${CUDA_nppicc_LIBRARY})	
+target_link_libraries(jetson-utils ${OPENGL_LIBRARY} GLX ${GLU_LIB} ${GLEW_LIB} gstreamer-1.0 gstapp-1.0 gstpbutils-1.0 gstwebrtc-1.0 gstsdp-1.0 gstrtspserver-1.0 json-glib-1.0 soup-2.4 ${CUDA_nppicc_LIBRARY})	
 
 if(NVBUF_UTILS)
 	target_link_libraries(jetson-utils nvbuf_utils)
@@ -126,6 +217,20 @@ endif()
 
 if(WITH_IMGUI)
 	target_link_libraries(jetson-utils glfw)
+endif()
+
+if(WITH_OPENCL)
+    target_link_libraries(jetson-utils ${OpenCL_LIBRARY} ocl)
+    target_compile_definitions(jetson-utils PUBLIC "-DWITH_OPENCL=1")
+endif()
+
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(deps REQUIRED IMPORTED_TARGET glib-2.0)
+target_link_libraries(jetson-utils PRIVATE PkgConfig::deps)
+
+if(WITH_DRM)
+    target_link_libraries(jetson-utils pthread ${EGL_LIB} ${GLES2_LIB} ${GBM_LIB} ${DRM_LIB} )
 endif()
 
 # transfer all headers to the include directory 

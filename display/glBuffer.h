@@ -23,9 +23,16 @@
 #ifndef __GL_BUFFER_H__
 #define __GL_BUFFER_H__
 
-
+#if WITH_CUDA
 #include "cudaUtility.h"
 #include "cuda_gl_interop.h"
+#endif
+#if WITH_OPENCL
+#include "oclUtility.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#endif
 
 
 /**
@@ -53,28 +60,46 @@
 #define GL_MAP_CUDA 		0x2
 
 /**
+ * Map the buffer to OpenCL address space
+ * @ingroup OpenGL
+ */
+#define GL_MAP_OPENCL         0x3
+
+/**
  * Copy the buffer from CPU to OpenGL
  * @ingroup OpenGL
  */
-#define GL_FROM_CPU			0x3
+#define GL_FROM_CPU			0x4
 
 /**
  * Copy the buffer from CUDA to OpenGL
  * @ingroup OpenGL
  */
-#define GL_FROM_CUDA		0x4
+#define GL_FROM_CUDA		0x5
+
+/**
+ * Copy the buffer from OpenCL to OpenGL
+ * @ingroup OpenGL
+ */
+#define GL_FROM_OPENCL        0x6
 
 /**
  * Copy the buffer to CPU from OpenGL
  * @ingroup OpenGL
  */
-#define GL_TO_CPU			0x5
+#define GL_TO_CPU			0x7
 
 /**
  * Copy the buffer to CUDA from OpenGL
  * @ingroup OpenGL
  */
-#define GL_TO_CUDA			0x6
+#define GL_TO_CUDA			0x8
+
+/**
+ * Copy the buffer to CUDA from OpenGL
+ * @ingroup OpenGL
+ */
+#define GL_TO_OPENCL          0x9
 
 /**
  * Map the buffer as write-only and discard previous contents
@@ -276,8 +301,9 @@ private:
 
 	uint32_t mMapDevice;
 	uint32_t mMapFlags;
-
+#if WITH_CUDA
 	cudaGraphicsResource* mInteropCUDA;
+#endif
 };
 
 

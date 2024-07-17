@@ -23,8 +23,10 @@
 #ifndef __IMAGE_IO_H_
 #define __IMAGE_IO_H_
 
-
+#if WITH_CUDA
 #include "cudaUtility.h"
+#endif
+
 #include "imageFormat.h"
 
 
@@ -97,7 +99,7 @@ bool loadImage( const char* filename, void** output, int* width, int* height, im
  *             it is recommended to use loadImage() instead, which supports multiple image formats.
  * @ingroup image
  */
-bool loadImageRGBA( const char* filename, float4** ptr, int* width, int* height );
+bool loadImageRGBA( const char* filename, float** ptr, int* width, int* height );
 
 /**
  * Load a color image from disk into CUDA memory with alpha, in float4 RGBA format with pixel values 0-255.
@@ -107,7 +109,7 @@ bool loadImageRGBA( const char* filename, float4** ptr, int* width, int* height 
  *             it is recommended to use loadImage() instead, which supports multiple image formats.
  * @ingroup image
  */
-bool loadImageRGBA( const char* filename, float4** cpu, float4** gpu, int* width, int* height );
+bool loadImageRGBA( const char* filename, float** cpu, float** gpu, int* width, int* height );
 
 
 /**
@@ -137,7 +139,8 @@ bool loadImageRGBA( const char* filename, float4** cpu, float4** gpu, int* width
  * @ingroup image
  */
 template<typename T> bool saveImage( const char* filename, T* ptr, int width, int height, int quality=95, 
-							  const float2& pixel_range=make_float2(0,255), bool sync=true )		{ return saveImage(filename, (void*)ptr, width, height, imageFormatFromType<T>(), quality, pixel_range, sync); }
+							  const float pixel_range_min=0, const float pixel_range_max=255, bool sync=true)
+{ return saveImageType(filename, (void*)ptr, width, height, imageFormatFromType<T>(), quality, pixel_range_min, pixel_range_max, sync); }
 	
 /**
  * Save an image in CPU/GPU shared memory to disk.
@@ -165,8 +168,8 @@ template<typename T> bool saveImage( const char* filename, T* ptr, int width, in
  *             any processing on the image has been completed before saving it to disk.
  * @ingroup image
  */
-bool saveImage( const char* filename, void* ptr, int width, int height, imageFormat format,
-			 int quality=95, const float2& pixel_range=make_float2(0,255), bool sync=true );
+bool saveImageType( const char* filename, void* ptr, int width, int height, imageFormat format,
+			 int quality=95, const float pixel_range_min=0, const float pixel_range_max=255, bool sync=true );
 
 /**
  * Save a float4 image in CPU/GPU shared memory to disk.
@@ -175,15 +178,18 @@ bool saveImage( const char* filename, void* ptr, int width, int height, imageFor
  *             it is recommended to use saveImage() instead, which supports multiple image formats.
  * @ingroup image
  */
+bool saveImageRGBA( const char* filename, float* ptr, int width, int height, float max_pixel=255.0f, int quality=100 );
+#if WITH_CUDA
 bool saveImageRGBA( const char* filename, float4* ptr, int width, int height, float max_pixel=255.0f, int quality=100 );
+#endif
 
 
 /**
  * @internal
  * @ingroup image
  */
+
 #define LOG_IMAGE "[image]  "
 
 
 #endif
-

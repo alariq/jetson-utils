@@ -105,6 +105,29 @@ __global__ void RGBToRGB(T_in* srcImage, T_out* dstImage, int width, int height)
 		dstImage[pixel] = make_vec<T_out>(px.x, px.y, px.z, alpha(px));
 }
 
+template<typename T_in, typename T_out, bool isBGR>
+__global__ void RGBToRGB(T_in* srcImage, T_out* dstImage, int width, int height, int istride, int ostride)
+{
+	const int x = (blockIdx.x * blockDim.x) + threadIdx.x;
+	const int y = (blockIdx.y * blockDim.y) + threadIdx.y;
+	
+	const int ipixel = y * istride + x;
+	const int opixel = y * ostride + x;
+
+	if( x >= width )
+		return; 
+
+	if( y >= height )
+		return;
+
+	const T_in px = srcImage[ipixel];
+	
+	if( isBGR )
+		dstImage[opixel] = make_vec<T_out>(px.z, px.y, px.x, alpha(px));
+	else
+		dstImage[opixel] = make_vec<T_out>(px.x, px.y, px.z, alpha(px));
+}
+
 template<typename T_in, typename T_out, bool isBGR> 
 static cudaError_t launchRGBToRGB( T_in* srcDev, T_out* dstDev, size_t width, size_t height )
 {
@@ -115,6 +138,20 @@ static cudaError_t launchRGBToRGB( T_in* srcDev, T_out* dstDev, size_t width, si
 	const dim3 gridDim(iDivUp(width,blockDim.x), iDivUp(height,blockDim.y), 1);
 
 	RGBToRGB<T_in, T_out, isBGR><<<gridDim, blockDim>>>(srcDev, dstDev, width, height);
+	
+	return CUDA(cudaGetLastError());
+}
+
+template<typename T_in, typename T_out, bool isBGR> 
+static cudaError_t launchRGBToRGB( T_in* srcDev, T_out* dstDev, size_t width, size_t height, size_t i_stride, size_t o_stride)
+{
+	if( !srcDev || !dstDev )
+		return cudaErrorInvalidDevicePointer;
+
+	const dim3 blockDim(32,8,1);
+	const dim3 gridDim(iDivUp(width,blockDim.x), iDivUp(height,blockDim.y), 1);
+
+	RGBToRGB<T_in, T_out, isBGR><<<gridDim, blockDim>>>(srcDev, dstDev, width, height, i_stride, o_stride);
 	
 	return CUDA(cudaGetLastError());
 }
@@ -163,6 +200,16 @@ cudaError_t cudaRGB8ToRGBA8( uchar3* srcDev, uchar4* dstDev, size_t width, size_
 		return launchRGBToRGB<uchar3, uchar4, true>(srcDev, dstDev, width, height);
 	else
 		return launchRGBToRGB<uchar3, uchar4, false>(srcDev, dstDev, width, height);
+}
+
+//sebi:
+// cudaRGB8ToRGBA8 (uchar3 -> uchar4)
+cudaError_t cudaRGB8ToRGBA8( uchar3* srcDev, uchar4* dstDev, size_t width, size_t height, size_t i_stride, size_t o_stride, bool swapRedBlue)
+{
+	if( swapRedBlue )
+		return launchRGBToRGB<uchar3, uchar4, true>(srcDev, dstDev, width, height, i_stride, o_stride);
+	else
+		return launchRGBToRGB<uchar3, uchar4, false>(srcDev, dstDev, width, height, i_stride, o_stride);
 }
 
 // cudaRGBA8ToRGB8 (uchar4 -> uchar3)

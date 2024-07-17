@@ -29,8 +29,13 @@
 #include "filesystem.h"
 #include "timespec.h"
 #include "logging.h"
-
+#if WITH_CUDA
 #include "cudaColorspace.h"
+#endif
+#if WITH_OPENCL
+#include "oclColorspace.h"
+#include <cassert>
+#endif
 
 #define GST_USE_UNSTABLE_API
 #include <gst/webrtc/webrtc.h>
@@ -41,6 +46,9 @@
 #include <strings.h>
 #include <unistd.h>
 
+#include "../image/stb/stb_image.h"
+#include "../image/stb/stb_image_write.h"
+#include "../image/stb/stb_image_resize.h"
 
 // supported video file extensions
 const char* gstEncoder::SupportedExtensions[] = { "mkv", "mp4", "qt", 
@@ -504,6 +512,8 @@ void gstEncoder::onEnoughData( GstElement* pipeline, gpointer user_data )
 // encodeYUV
 bool gstEncoder::encodeYUV( void* buffer, size_t size )
 {
+	SCOPED_TIMER("encodeYUV");
+
 	if( !buffer || size == 0 )
 		return false;
 	
@@ -701,8 +711,8 @@ bool gstEncoder::Render( void* image, uint32_t width, uint32_t height, imageForm
 	}
 
 	// perform colorspace conversion
-	void* nextYUV = mBufferYUV.Next(RingBuffer::Write);
-
+	void* nextYUV = mBufferYUV.Next(RingBuffer::Write, false);
+#if WITH_CUDA
 	if( CUDA_FAILED(cudaConvertColor(image, format, nextYUV, IMAGE_I420, width, height)) )
 	{
 		LogError(LOG_GSTREAMER "gstEncoder::Render() -- unsupported image format (%s)\n", imageFormatToStr(format));
@@ -717,9 +727,55 @@ bool gstEncoder::Render( void* image, uint32_t width, uint32_t height, imageForm
 	}
 
 	CUDA(cudaDeviceSynchronize());	// TODO replace with cudaStream?
+#endif 
+#if WITH_OPENCL
+
+#if DUMP_IMAGES
+	cl_int stat;
+	void* rgb = clEnqueueMapBuffer(ocl_get_queue(), (cl_mem)image, CL_TRUE, CL_MAP_READ, 0, 
+			imageFormatSize(format, width, height), 0, NULL, NULL,&stat);
+
+	char fname[64];
+	static int iii = 0;
+	sprintf(fname, "dump/out%d.bmp", iii++);
+	stbi_write_bmp(fname, width, height, 3, rgb);
+
+	OCL(clEnqueueUnmapMemObject(ocl_get_queue(), (cl_mem)image, rgb, 0, nullptr, nullptr));
+#endif
+
+	//printf("Convert color: %s -> %s\n", imageFormatToStr(format), imageFormatToStr(IMAGE_I420));
+	if( OCL_FAILED(oclConvertColor((cl_mem)image, format, (cl_mem)nextYUV, IMAGE_I420, width, height)) )
+	{
+		LogError(LOG_GSTREAMER "gstBufferManager -- unsupported image format (%s)\n", imageFormatToStr(format));
+		LogError(LOG_GSTREAMER "                    supported formats are:\n");
+		LogError(LOG_GSTREAMER "                       * rgb8\n");		
+		LogError(LOG_GSTREAMER "                       * rgba8\n");		
+		LogError(LOG_GSTREAMER "                       * rgb32f\n");		
+		LogError(LOG_GSTREAMER "                       * rgba32f\n");
+
+		return -1;
+	}
+	//OCL(clFinish(ocl_get_queue()));	// TODO: do we need this?
+	cl_int status;
+	void* mapped_ptr = clEnqueueMapBuffer(ocl_get_queue(), (cl_mem)nextYUV, CL_TRUE, CL_MAP_READ, 0, 
+			imageFormatSize(IMAGE_I420, width, height), 0, NULL, NULL,&status);
+	CHECK_OPENCL_ERROR_NORET(status, "clEnqueueMapBuffer");
 	
 	// encode YUV buffer
+	enc_success = encodeYUV(mapped_ptr, i420Size);
+#elif WITH_CUDA
+	// encode YUV buffer
 	enc_success = encodeYUV(nextYUV, i420Size);
+#else
+	LogError("gstEncoder: unknown backend\n");
+#endif
+	if(!enc_success) {
+		LogError("Failed to encode\n");
+	}
+
+#if WITH_OPENCL
+	OCL(clEnqueueUnmapMemObject(ocl_get_queue(), (cl_mem)nextYUV, mapped_ptr, 0, nullptr, nullptr));
+#endif
 
 	// render sub-streams
 	render_end();	

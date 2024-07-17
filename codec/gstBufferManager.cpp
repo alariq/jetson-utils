@@ -21,9 +21,17 @@
  */
 
 #include "gstBufferManager.h"
+#if WITH_CUDA
 #include "cudaColorspace.h"
+#else
+#include <cassert>
+#endif
 #include "timespec.h"
 #include "logging.h"
+
+#if WITH_OPENCL
+#include "oclColorspace.h"
+#endif
 
 
 #ifdef ENABLE_NVMM
@@ -254,12 +262,26 @@ bool gstBufferManager::Enqueue( GstBuffer* gstBuffer, GstCaps* gstCaps )
 		}
 
 		memcpy(nextBuffer, gstData, gstSize);
-		mBufferYUV.Next(RingBuffer::Write);
+#define DUMP_IMAGES 0
+#if DUMP_IMAGES
+		LogVerbose(LOG_GSTREAMER "Copy %d bytes of gstData\n", gstSize);
+		int static counter = 0;
+		char fname[256];
+		sprintf(&fname[0], "dump/dump%d_yuv1.img", counter++);
+		if(FILE* f = fopen(fname, "wb")) {
+			fwrite(gstData, gstSize, 1, f); 
+			fclose(f);
+		}
+#endif
+		mBufferYUV.Unmap(nextBuffer);
+
+		mBufferYUV.Next(RingBuffer::Write, false);
 	}
 
 		// handle timestamps in either case (CPU or NVMM path)
 		size_t timestamp_size = sizeof(uint64_t);
 
+#if USE_TIMESTAMPS
 		// allocate timestamp ringbuffer (GPU only if not ZeroCopy)
 		if( !mTimestamps.Alloc(mOptions->numBuffers, timestamp_size, RingBuffer::ZeroCopy) )
 		{
@@ -282,7 +304,9 @@ bool gstBufferManager::Enqueue( GstBuffer* gstBuffer, GstCaps* gstCaps )
 		}
 
 		memcpy(nextTimestamp, (void*)&timestamp, timestamp_size);
-		mTimestamps.Next(RingBuffer::Write);
+		mTimestamps.Unmap(nextTimestamp);
+		mTimestamps.Next(RingBuffer::Write, false);
+#endif
 
 	mWaitEvent.Wake();
 	mFrameCount++;
@@ -404,11 +428,13 @@ int gstBufferManager::Dequeue( void** output, imageFormat format, uint64_t timeo
 
 	// handle the CPU path (non-NVMM)
 	if( !mNvmmUsed )
-		latestYUV = mBufferYUV.Next(RingBuffer::ReadLatestOnce);
+		latestYUV = mBufferYUV.Next(RingBuffer::ReadLatestOnce, false);
 
-	if( !latestYUV )
+	if( !latestYUV ) {
+		LogError(LOG_GSTREAMER "Returned zero latestYUV\n");
 		return -1;
-
+	}
+#if USE_TIMESTAMPS
 	// handle timestamp (both paths)
 	void* pLastTimestamp = NULL;
 	pLastTimestamp = mTimestamps.Next(RingBuffer::ReadLatestOnce);
@@ -422,11 +448,18 @@ int gstBufferManager::Dequeue( void** output, imageFormat format, uint64_t timeo
 	{
 		mLastTimestamp = *((uint64_t*)pLastTimestamp);
 	}
+	mTimestamps.Unmap(pLastTimestamp);
+#endif
 
 	// output raw image if conversion format is unknown
 	if ( format == IMAGE_UNKNOWN )
 	{
-		*output = latestYUV;
+#if WITH_OPENCL
+		assert(0 && "Not supported");
+		printf("raw images not supported: check comment below\n");
+		// when to Unmap this?
+#endif
+        *output = latestYUV;
 		return 1;
 	}
 
@@ -440,8 +473,10 @@ int gstBufferManager::Dequeue( void** output, imageFormat format, uint64_t timeo
 	}
 
 	// perform colorspace conversion
-	void* nextRGB = mBufferRGB.Next(RingBuffer::Write);
+	void* nextRGB = mBufferRGB.Next(RingBuffer::Write, false);
 
+	LogDebug("Convert color: %s -> %s\n", imageFormatToStr(mFormatYUV), imageFormatToStr(format));
+#if WITH_CUDA
 	if( CUDA_FAILED(cudaConvertColor(latestYUV, mFormatYUV, nextRGB, format, mOptions->width, mOptions->height)) )
 	{
 		LogError(LOG_GSTREAMER "gstBufferManager -- unsupported image format (%s)\n", imageFormatToStr(format));
@@ -453,6 +488,19 @@ int gstBufferManager::Dequeue( void** output, imageFormat format, uint64_t timeo
 
 		return -1;
 	}
+#else
+	if( OCL_FAILED(oclConvertColor((cl_mem)latestYUV, mFormatYUV, (cl_mem)nextRGB, format, mOptions->width, mOptions->height)) )
+	{
+		LogError(LOG_GSTREAMER "gstBufferManager -- unsupported image format (%s)\n", imageFormatToStr(format));
+		LogError(LOG_GSTREAMER "                    supported formats are:\n");
+		LogError(LOG_GSTREAMER "                       * rgb8\n");		
+		LogError(LOG_GSTREAMER "                       * rgba8\n");		
+		LogError(LOG_GSTREAMER "                       * rgb32f\n");		
+		LogError(LOG_GSTREAMER "                       * rgba32f\n");
+
+		return -1;
+	}
+#endif
 
 	*output = nextRGB;
 	return 1;

@@ -88,7 +88,7 @@ public:
 	/**
 	 * Render the texture to the specific screen rectangle.
 	 */
-	void Render( const float4& rect );
+	void Render( const float rect[4] );
 	
 	/**
 	 * Retrieve the OpenGL resource handle of the texture.
@@ -130,7 +130,9 @@ public:
 	 *          CUDA device pointer to buffer if GL_MAP_CUDA was specified,
 	 *          or NULL if an error occurred mapping the buffer.                  
 	 */
-	void* Map( uint32_t device, uint32_t flags );
+	void* Map( uint32_t device, uint32_t flags);
+
+	bool Update( uint32_t device, void* data);
 
 	/**
 	 * Unmap the texture from CPU/CUDA access.
@@ -204,7 +206,11 @@ private:
 	bool init( uint32_t width, uint32_t height, uint32_t format, void* data );
 
 	uint32_t allocDMA( uint32_t type );
+#if WITH_CUDA
 	cudaGraphicsResource* allocInterop( uint32_t type, uint32_t flags );
+#elif WITH_OPENCL
+	cl_mem allocInterop( uint32_t type, uint32_t flags );
+#endif
 
 	uint32_t mID;
 	uint32_t mPackDMA;
@@ -218,8 +224,13 @@ private:
 	uint32_t mMapDevice;
 	uint32_t mMapFlags;
 
+#if WITH_CUDA
 	cudaGraphicsResource* mInteropPack;
 	cudaGraphicsResource* mInteropUnpack;
+#elif WITH_OPENCL
+	cl_mem mInteropPack;
+	cl_mem mInteropUnpack;
+#endif
 };
 
 

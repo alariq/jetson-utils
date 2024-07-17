@@ -22,12 +22,22 @@
 
 #include "glUtility.h"
 #include "glTexture.h"
+#include "timespec.h"
 
+#if WITH_CUDA
 #include "cudaMappedMemory.h"
-
-
 // from glBuffer.cpp
 cudaGraphicsRegisterFlags cudaGraphicsRegisterFlagsFromGL( uint32_t flags );
+#endif
+#if WITH_OPENCL
+cl_mem_flags oclGraphicsRegisterFlagsFromGL( uint32_t flags );
+//#if defined(__aarch64__)
+#include "ocl_utils.h"
+//#endif
+#include "logging.h"
+#include <cassert>
+#endif
+
 
 
 //-----------------------------------------------------------------------------------
@@ -55,6 +65,7 @@ inline const char* glTextureFormatToStr( uint32_t format )
 		GL_FORMAT_STR(GL_LUMINANCE_ALPHA16F_ARB);
 		GL_FORMAT_STR(GL_LUMINANCE_ALPHA32F_ARB);
 
+		GL_FORMAT_STR(GL_RGB);
 		GL_FORMAT_STR(GL_RGB8);
 		GL_FORMAT_STR(GL_RGB16);
 		GL_FORMAT_STR(GL_RGB32UI);
@@ -63,6 +74,7 @@ inline const char* glTextureFormatToStr( uint32_t format )
 		GL_FORMAT_STR(GL_RGB32I);
 		GL_FORMAT_STR(GL_RGB16F_ARB);
 
+		GL_FORMAT_STR(GL_RGBA);
 		GL_FORMAT_STR(GL_RGBA8);
 		GL_FORMAT_STR(GL_RGBA16);
 		GL_FORMAT_STR(GL_RGBA32UI);
@@ -100,6 +112,7 @@ inline uint32_t glTextureLayout( uint32_t format )
 		case GL_LUMINANCE_ALPHA16F_ARB:
 		case GL_LUMINANCE_ALPHA32F_ARB: return GL_LUMINANCE_ALPHA;
 		
+		case GL_RGB:	 // GLES				
 		case GL_RGB8:					
 		case GL_RGB16:
 		case GL_RGB32UI:
@@ -109,6 +122,7 @@ inline uint32_t glTextureLayout( uint32_t format )
 		case GL_RGB16F_ARB:
 		case GL_RGB32F_ARB:				return GL_RGB;
 
+		case GL_RGBA:	 // GLES				
 		case GL_RGBA8:
 		case GL_RGBA16:
 		case GL_RGBA32UI:
@@ -146,6 +160,8 @@ inline uint32_t glTextureType( uint32_t format )
 	{
 		case GL_LUMINANCE8:
 		case GL_LUMINANCE8_ALPHA8:
+		case GL_RGB:  // GLES
+		case GL_RGBA: // GLES
 		case GL_RGB8:
 		case GL_RGBA8:					return GL_UNSIGNED_BYTE;
 
@@ -235,6 +251,7 @@ glTexture::glTexture()
 // destructor
 glTexture::~glTexture()
 {
+#if WITH_CUDA
 	if( mInteropPack != NULL )
 	{
 		CUDA(cudaGraphicsUnregisterResource(mInteropPack));
@@ -246,6 +263,19 @@ glTexture::~glTexture()
 		CUDA(cudaGraphicsUnregisterResource(mInteropUnpack));
 		mInteropUnpack = NULL;
 	}
+#elif WITH_OPENCL
+	if( mInteropPack != NULL )
+	{
+		OCL(clReleaseMemObject(mInteropPack));
+		mInteropPack = NULL;
+	}
+
+	if( mInteropUnpack != NULL )
+	{
+		OCL(clReleaseMemObject(mInteropUnpack ));
+		mInteropUnpack = NULL;
+	}
+#endif
 
 	if( mPackDMA != 0 )
 	{
@@ -293,7 +323,7 @@ bool glTexture::init( uint32_t width, uint32_t height, uint32_t format, void* da
 	// generate texture objects
 	uint32_t id = 0;
 	
-	GL(glEnable(GL_TEXTURE_2D));
+	//GL(glEnable(GL_TEXTURE_2D));
 	GL(glGenTextures(1, &id));
 	GL(glBindTexture(GL_TEXTURE_2D, id));
 	
@@ -316,7 +346,7 @@ bool glTexture::init( uint32_t width, uint32_t height, uint32_t format, void* da
 	mSize   = size;
 
 	GL(glBindTexture(GL_TEXTURE_2D, 0));
-	GL(glDisable(GL_TEXTURE_2D));
+	//GL(glDisable(GL_TEXTURE_2D));
 
 	return true;
 }
@@ -334,9 +364,9 @@ uint32_t glTexture::allocDMA( uint32_t type )
 	uint32_t dma = 0;
 	
 	GL_VERIFY(glGenBuffers(1, &dma));
-	GL_VERIFY(glBindBufferARB(type, dma));
-	GL_VERIFY(glBufferDataARB(type, mSize, NULL, GL_DYNAMIC_DRAW_ARB));
-	GL_VERIFY(glBindBufferARB(type, 0));
+	GL_VERIFY(glBindBuffer(type, dma));
+	GL_VERIFY(glBufferData(type, mSize, NULL, GL_DYNAMIC_DRAW_ARB));
+	GL_VERIFY(glBindBuffer(type, 0));
 
 	if( type == GL_PIXEL_PACK_BUFFER_ARB )
 		mPackDMA = dma;
@@ -347,6 +377,7 @@ uint32_t glTexture::allocDMA( uint32_t type )
 }
 	
 
+#if WITH_CUDA
 // allocInterop
 cudaGraphicsResource* glTexture::allocInterop( uint32_t type, uint32_t flags )
 {
@@ -368,6 +399,43 @@ cudaGraphicsResource* glTexture::allocInterop( uint32_t type, uint32_t flags )
 	LogVerbose(LOG_CUDA "registered openGL texture for interop access (%ux%u, %s, %u bytes)\n", mWidth, mHeight, glTextureFormatToStr(mFormat), mSize);
 	return interop;
 }
+#elif WITH_OPENCL
+cl_mem glTexture::allocInterop( uint32_t type, uint32_t flags )
+{
+	if( type == GL_PIXEL_PACK_BUFFER_ARB && mInteropPack != NULL )
+		return mInteropPack;
+	else if( type == GL_PIXEL_UNPACK_BUFFER_ARB && mInteropUnpack != NULL )
+		return mInteropUnpack;
+
+	cl_mem_flags ocl_flags = oclGraphicsRegisterFlagsFromGL(flags);
+	
+#if __aarch64__
+	if(!clImportMemoryARM) {
+		LogError("glTexture::allocInterop: not supported Import memory ARM\n");
+		return 0;
+	}
+	uint32_t dma_buffer = allocDMA(type);
+	cl_import_properties_arm props[] = { CL_IMPORT_TYPE_ARM, CL_IMPORT_TYPE_DMA_BUF_ARM, CL_IMPORT_DMA_BUF_DATA_CONSISTENCY_WITH_HOST_ARM, CL_TRUE, 0 };
+	//cl_import_properties_arm props[] = { CL_IMPORT_TYPE_ARM, CL_IMPORT_TYPE_DMA_BUF_ARM, 0 };
+	cl_int status = CL_SUCCESS;
+	cl_mem interop = clImportMemoryARM(ocl_get_context(), ocl_flags, props, &dma_buffer, mSize, &status);
+	CHECK_OPENCL_ERROR_NORET(status, "clImportMemoryARM");
+#else
+	cl_int status;
+	cl_mem interop = clCreateFromGLBuffer(ocl_get_context(), ocl_flags, allocDMA(type), &status);
+	CHECK_OPENCL_ERROR_NORET(status, "clCreateFromGLBuffer");
+#endif
+
+	if( type == GL_PIXEL_PACK_BUFFER_ARB )
+		mInteropPack = interop;
+	else if( type == GL_PIXEL_UNPACK_BUFFER_ARB )
+		mInteropUnpack = interop;
+
+	LogVerbose(LOG_OCL "registered openGL buffer for interop access (%ux%u, %s, %u bytes)\n", mWidth, mHeight, glTextureFormatToStr(mFormat), mSize);
+	return interop;
+}
+
+#endif
 
 
 // Bind
@@ -376,8 +444,9 @@ bool glTexture::Bind()
 	if( !mID )
 		return false;
 
-	GL_VERIFY(glEnable(GL_TEXTURE_2D));
-	GL_VERIFY(glActiveTextureARB(GL_TEXTURE0_ARB));
+	//GL_VERIFY(glEnable(GL_TEXTURE_2D));
+	//GL_VERIFY(glActiveTextureARB(GL_TEXTURE0_ARB));
+	GL_VERIFY(glActiveTexture(GL_TEXTURE0));
 	GL_VERIFY(glBindTexture(GL_TEXTURE_2D, mID));
 
 	return true;
@@ -388,12 +457,12 @@ bool glTexture::Bind()
 void glTexture::Unbind()
 {
 	glBindTexture(GL_TEXTURE_2D, 0);
-	glDisable(GL_TEXTURE_2D);
+	//glDisable(GL_TEXTURE_2D);
 }
 
 
 // Render
-void glTexture::Render( const float4& rect )
+void glTexture::Render( const float rect[4] )
 {
 	if( !Bind() )
 		return;
@@ -403,16 +472,16 @@ void glTexture::Render( const float4& rect )
 		glColor4f(1.0f,1.0f,1.0f,1.0f);
 
 		glTexCoord2f(0.0f, 0.0f); 
-		glVertex2f(rect.x, rect.y);
+		glVertex2f(rect[0], rect[1]);
 
 		glTexCoord2f(1.0f, 0.0f); 
-		glVertex2f(rect.z, rect.y);	
+		glVertex2f(rect[2], rect[1]);	
 
 		glTexCoord2f(1.0f, 1.0f); 
-		glVertex2f(rect.z, rect.w);
+		glVertex2f(rect[2], rect[3]);
 
 		glTexCoord2f(0.0f, 1.0f); 
-		glVertex2f(rect.x, rect.w);
+		glVertex2f(rect[0], rect[3]);
 
 	glEnd();
 	Unbind();
@@ -429,7 +498,8 @@ void glTexture::Render( float x, float y )
 // Render
 void glTexture::Render( float x, float y, float width, float height )
 {
-	Render(make_float4(x, y, x + width, y + height));
+	float rect[4] = {x, y, x + width, y + height};
+	Render(rect);
 }
 
 
@@ -443,6 +513,51 @@ static inline uint32_t dmaTypeFromFlags( uint32_t flags )
 		return GL_PIXEL_UNPACK_BUFFER_ARB;	// GL_READ_WRITE?
 }
 
+bool glTexture::Update( uint32_t device, void* data)
+{
+	SCOPED_TIMER("glTexture::Update");
+
+	if(device != GL_MAP_CPU) {
+		LogError(LOG_GL "error -- glTexture Update is only supported for CPU type\n");
+		return false;
+	}
+
+	if(!mID) {
+		LogError(LOG_GL "error -- glTexture is not created\n");
+		return false;
+	}
+
+	GL_VERIFY(glActiveTexture(GL_TEXTURE0));
+	GL_VERIFY(glBindTexture(GL_TEXTURE_2D, mID));
+
+	const uint32_t dmaType = GL_PIXEL_UNPACK_BUFFER;
+	const uint32_t dmaBuffer = allocDMA(dmaType);
+
+	if( !dmaBuffer )
+		return false;
+
+	// set pixel alignment flags (default is 4, but sometimes fails on rgb8 depending on resolution)
+	GL(glPixelStorei(GL_UNPACK_ALIGNMENT, 1));
+	//GL(glPixelStorei(GL_UNPACK_ROW_LENGTH, mWidth));
+	//GL(glPixelStorei(GL_UNPACK_IMAGE_HEIGHT, mHeight));
+
+	// either map in CPU mode or with CUDA interop
+	if( device == GL_MAP_CPU )
+	{
+		GL(glBindBuffer(dmaType, dmaBuffer));
+		GL(glBufferData(dmaType, mSize, data, GL_STREAM_DRAW));	
+		GL(glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, glTextureLayout(mFormat), glTextureType(mFormat), NULL));
+		GL(glBindBuffer(dmaType, 0));
+	}
+
+	GL_VERIFY(glBindTexture(GL_TEXTURE_2D, 0));
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+	//glDisable(GL_TEXTURE_2D);
+
+	return true;
+}
+
 
 // Map
 void* glTexture::Map( uint32_t device, uint32_t flags )
@@ -453,7 +568,7 @@ void* glTexture::Map( uint32_t device, uint32_t flags )
 		return NULL;
 	}
 
-	if( device != GL_MAP_CPU && device != GL_MAP_CUDA )
+	if( device != GL_MAP_CPU && device != GL_MAP_CUDA && device != GL_MAP_OPENCL )
 	{
 		LogError(LOG_GL "glTexture::Map() -- invalid device (must be GL_MAP_CPU or GL_MAP_CUDA)\n");
 		return NULL;
@@ -484,7 +599,7 @@ void* glTexture::Map( uint32_t device, uint32_t flags )
 		if( flags == GL_WRITE_DISCARD )
 		{
 			// invalidate the old buffer so we can map without stalling
-			GL(glBufferDataARB(GL_PIXEL_UNPACK_BUFFER_ARB, mSize, NULL, GL_STREAM_DRAW_ARB));	
+			GL(glBufferData(GL_PIXEL_UNPACK_BUFFER_ARB, mSize, NULL, GL_STREAM_DRAW_ARB));	
 			flags = GL_WRITE_ONLY; // GL expects GL_WRITE_ONLY
 		}
 		else if( flags == GL_READ_ONLY )
@@ -493,8 +608,14 @@ void* glTexture::Map( uint32_t device, uint32_t flags )
 			GL(glReadPixels(0, 0, mWidth, mHeight, glTextureLayout(mFormat), glTextureType(mFormat), NULL));
 		}
 
+#if defined(USE_OPENGL_ES2)
 		// lock the PBO buffer
+		// TODO: GL_OES_mapbuffer or GL_EXT_map_buffer_range
+		assert(0);
+		//dmaPtr = glMapBufferRangeEXT(dmaType, 0, mSize, flags);
+#else
 		dmaPtr = glMapBuffer(dmaType, flags);
+#endif
 
 		if( !dmaPtr )
 		{
@@ -503,6 +624,7 @@ void* glTexture::Map( uint32_t device, uint32_t flags )
 			return NULL;
 		}
 	}
+#if WITH_CUDA
 	else if( device == GL_MAP_CUDA )
 	{
 		if( flags == GL_READ_ONLY )
@@ -536,6 +658,37 @@ void* glTexture::Map( uint32_t device, uint32_t flags )
 		if( mSize != mappedSize )
 			LogError(LOG_GL "glTexture::Map() -- CUDA size mismatch %zu bytes  (expected=%u)\n", mappedSize, mSize);
 	}
+#elif WITH_OPENCL
+	else if( device == GL_MAP_OPENCL)
+	{
+		if( flags == GL_READ_ONLY )
+		{
+			GL(glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, mPackDMA));
+			GL(glReadPixels(0, 0, mWidth, mHeight, glTextureLayout(mFormat), glTextureType(mFormat), NULL));
+			GL(glBindBuffer(GL_PIXEL_PACK_BUFFER_ARB, 0));
+		}
+
+		// make sure OpenCL resource is registered
+		cl_mem interop = allocInterop(dmaType, flags);
+
+		if( !interop )
+			return NULL;
+
+		if( mMapFlags != 0 && mMapFlags != flags ) {	// TODO two buffers, but one set of flags
+			assert(0 && "Not supported changing flags");
+			//CUDA(cudaGraphicsResourceSetMapFlags(interop, cudaGraphicsRegisterFlagsFromGL(flags)));
+		}
+
+#if !defined(__aarch64__)
+		if(OCL_FAILED(clEnqueueAcquireGLObjects(ocl_get_queue(), 1, &interop, 0, nullptr, nullptr))) {
+			LogError("clEnqueueAcquireGLObjects: Failed to acquire gl objects\n");
+			return NULL;
+		}
+#endif
+
+		dmaPtr = interop;
+	}
+#endif
 
 	mMapDevice = device;
 	mMapFlags  = flags;
@@ -547,7 +700,7 @@ void* glTexture::Map( uint32_t device, uint32_t flags )
 // Unmap
 void glTexture::Unmap()
 {
-	if( mMapDevice != GL_MAP_CPU && mMapDevice != GL_MAP_CUDA )
+	if( mMapDevice != GL_MAP_CPU && mMapDevice != GL_MAP_CUDA && mMapDevice != GL_MAP_OPENCL)
 		return;
 
 	if( !Bind() )
@@ -557,13 +710,20 @@ void glTexture::Unmap()
 
 	if( mMapDevice == GL_MAP_CPU )
 	{
+#if defined(USE_OPENGL_ES2)
+		// TODO:
+		assert(0);
+		//GL(glUnmapBuffer(dmaType));
+#else
 		GL(glUnmapBuffer(dmaType));
+#endif
 
 		if( mMapFlags != GL_READ_ONLY )
 			GL(glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, glTextureLayout(mFormat), glTextureType(mFormat), NULL));
 
 		GL(glBindBuffer(dmaType, 0));
 	}
+#if WITH_CUDA
 	else if( mMapDevice == GL_MAP_CUDA )
 	{
 		cudaGraphicsResource* interop = allocInterop(dmaType, mMapFlags);
@@ -580,6 +740,28 @@ void glTexture::Unmap()
 			GL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0));	
 		}
 	}
+#elif WITH_OPENCL
+	else if( mMapDevice == GL_MAP_OPENCL)
+	{
+		cl_mem interop = allocInterop(dmaType, mMapFlags);
+
+		if( !interop ) {
+			return;
+		}
+
+#if !defined(__aarch64__)
+		OCL(clEnqueueReleaseGLObjects(ocl_get_queue(), 1, &interop, 0, nullptr, nullptr));
+#endif
+
+		if( mMapFlags != GL_READ_ONLY )
+		{
+			GL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, mUnpackDMA));
+			GL(glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, glTextureLayout(mFormat), glTextureType(mFormat), NULL));
+			GL(glBindBuffer(GL_PIXEL_UNPACK_BUFFER_ARB, 0));	
+		}
+	}
+
+#endif
 
 	mMapDevice = 0;
 	Unbind();
@@ -612,6 +794,7 @@ bool glTexture::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags 
 
 		memcpy((uint8_t*)dst + offset, ptr, size);
 	}
+#if WITH_CUDA
 	else if( flags == GL_FROM_CUDA )
 	{
 		void* dst = Map(GL_MAP_CUDA, mapFlags);
@@ -625,6 +808,7 @@ bool glTexture::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags 
 			return false;
 		}
 	}
+#endif
 	else if( flags == GL_TO_CPU )
 	{
 		void* src = Map(GL_MAP_CPU, mapFlags);
@@ -634,6 +818,7 @@ bool glTexture::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags 
 	
 		memcpy(ptr, (uint8_t*)src + offset, size);
 	}
+#if WITH_CUDA
 	else if( flags == GL_TO_CUDA )
 	{
 		void* src = Map(GL_MAP_CUDA, mapFlags);
@@ -647,6 +832,7 @@ bool glTexture::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags 
 			return false;
 		}
 	}
+#endif
 
 	Unmap();
 	return true;

@@ -83,6 +83,8 @@ cudaError_t cudaRGBA32ToBGRA32( float4* input, float4* output, size_t width, siz
  *                    The default is false, and the channels will remain the same.
  */
 cudaError_t cudaRGB8ToRGBA8( uchar3* input, uchar4* output, size_t width, size_t height, bool swapRedBlue=false );
+//sebi:
+cudaError_t cudaRGB8ToRGBA8( uchar3* input, uchar4* output, size_t width, size_t height, size_t i_stride, size_t o_stride, bool swapRedBlue=false );
 
 /**
  * Convert uchar4 RGBA/BGRA image to uchar3 RGB/BGR image

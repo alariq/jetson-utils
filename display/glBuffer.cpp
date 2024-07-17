@@ -22,6 +22,9 @@
 
 #include "glUtility.h"
 #include "glBuffer.h"
+#if !WITH_CUDA
+#include <cassert>
+#endif
 
 
 // constructor
@@ -37,7 +40,9 @@ glBuffer::glBuffer()
 	
 	mNumElements = 0;
 	mElementSize = 0;
+#if WITH_CUDA
 	mInteropCUDA = NULL;
+#endif
 }
 
 
@@ -136,6 +141,7 @@ void glBuffer::Unbind()
 }
 
 
+#if WITH_CUDA
 // cudaGraphicsRegisterFlagsFromGL
 cudaGraphicsRegisterFlags cudaGraphicsRegisterFlagsFromGL( uint32_t flags )
 {
@@ -151,6 +157,23 @@ cudaGraphicsRegisterFlags cudaGraphicsRegisterFlagsFromGL( uint32_t flags )
 		return cudaGraphicsRegisterFlagsNone;
 #endif
 }
+#elif WITH_OPENCL
+cl_mem_flags oclGraphicsRegisterFlagsFromGL( uint32_t flags )
+{
+#if defined(__x86_64__) || defined(__amd64__)
+	// there's a memory access issue on x86 when the flags below are used, so disable them
+	return CL_MEM_READ_WRITE;
+#else
+	if( flags == GL_WRITE_DISCARD )
+		return CL_MEM_WRITE_ONLY;
+	else if( flags == GL_READ_ONLY )
+		return CL_MEM_READ_ONLY;
+	else
+		return CL_MEM_READ_WRITE;
+#endif
+}
+
+#endif
 
 
 // Map
@@ -175,7 +198,14 @@ void* glBuffer::Map( uint32_t device, uint32_t flags )
 		}
 
 		// lock the buffer
+#if defined(USE_OPENGL_ES2)
+		// TODO:
+		assert(0);
+		//void* ptr = glMapBufferRangeEXT(mType, 0, mSize, flags);
+		void* ptr = nullptr;
+#else
 		void* ptr = glMapBuffer(mType, flags);
+#endif
 
 		if( !ptr )
 		{
@@ -187,6 +217,7 @@ void* glBuffer::Map( uint32_t device, uint32_t flags )
 		mMapDevice = device;
 		return ptr;
 	}
+#if WITH_CUDA
 	else if( device == GL_MAP_CUDA )
 	{
 		if( !mInteropCUDA )
@@ -227,6 +258,9 @@ void* glBuffer::Map( uint32_t device, uint32_t flags )
 
 		return devPtr;
 	}
+#else
+	assert(device != GL_MAP_CUDA );
+#endif
 
 	LogError(LOG_GL "glBuffer::Map() -- invalid device (must be GL_MAP_CPU or GL_MAP_CUDA)\n");
 	return NULL;
@@ -244,8 +278,14 @@ void glBuffer::Unmap()
 
 	if( mMapDevice == GL_MAP_CPU )
 	{
+#if defined(USE_OPENGL_ES2)
+		assert(0 && "Not implemented");
+		//GL(glUnmapBuffer(mType));
+#else
 		GL(glUnmapBuffer(mType));
+#endif
 	}
+#if WITH_CUDA
 	else if( mMapDevice == GL_MAP_CUDA )
 	{
 		if( !mInteropCUDA )
@@ -253,6 +293,7 @@ void glBuffer::Unmap()
 
 		CUDA(cudaGraphicsUnmapResources(1, &mInteropCUDA));
 	}
+#endif
 
 	mMapDevice = 0;
 	Unbind();
@@ -285,6 +326,7 @@ bool glBuffer::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags )
 
 		memcpy((uint8_t*)dst + offset, ptr, size);
 	}
+#if WITH_CUDA
 	else if( flags == GL_FROM_CUDA )
 	{
 		void* dst = Map(GL_MAP_CUDA, mapFlags);
@@ -298,6 +340,7 @@ bool glBuffer::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags )
 			return false;
 		}
 	}
+#endif
 	else if( flags == GL_TO_CPU )
 	{
 		void* src = Map(GL_MAP_CPU, mapFlags);
@@ -307,6 +350,7 @@ bool glBuffer::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags )
 	
 		memcpy(ptr, (uint8_t*)src + offset, size);
 	}
+#if WITH_CUDA
 	else if( flags == GL_TO_CUDA )
 	{
 		void* src = Map(GL_MAP_CUDA, mapFlags);
@@ -320,6 +364,7 @@ bool glBuffer::Copy( void* ptr, uint32_t offset, uint32_t size, uint32_t flags )
 			return false;
 		}
 	}
+#endif
 
 	Unmap();
 	return true;

@@ -23,9 +23,20 @@
 #ifndef __IMAGE_FORMAT_H_
 #define __IMAGE_FORMAT_H_
 
-
+#if WITH_CUDA
 // include vector types (float4, float3, uchar4, uchar3, ect.)
 #include "cudaUtility.h"		
+#else
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+
+#include "logging.h"
+#include <cstddef>
+#define LOG_CUDA "[cuda]   "
+
+typedef unsigned char uchar;
+#endif
 
 
 /**
@@ -220,19 +231,23 @@ inline void imageFormatErrorMsg( const char* module, const char* function, image
 // get the IMAGE_RGB* formats from uchar3/uchar4/float3/float4
 template<typename T> inline imageFormat imageFormatFromType();
 
+#if WITH_CUDA
 template<> inline imageFormat imageFormatFromType<uchar3>();
 template<> inline imageFormat imageFormatFromType<uchar4>();
 template<> inline imageFormat imageFormatFromType<float3>();
 template<> inline imageFormat imageFormatFromType<float4>();
+#endif // WITH_CUDA
 
 // templated version of base type / vector type
 template<imageFormat format> struct imageFormatType;
 
+#if WITH_CUDA
 template<> struct imageFormatType<IMAGE_RGB8>    { typedef uint8_t Base; typedef uchar3 Vector; };
 template<> struct imageFormatType<IMAGE_RGBA8>   { typedef uint8_t Base; typedef uchar4 Vector; };
 
 template<> struct imageFormatType<IMAGE_RGB32F>  { typedef float Base; typedef float3 Vector; };
 template<> struct imageFormatType<IMAGE_RGBA32F> { typedef float Base; typedef float4 Vector; };
+#endif
 
 ///@}
 

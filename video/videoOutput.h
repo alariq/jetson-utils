@@ -44,6 +44,7 @@
 		  "                             * rtsp://@:8554/my_stream   (RTSP stream)\n"		\
 		  "                             * webrtc://@:1234/my_stream (WebRTC stream)\n"      	\
 		  "                             * display://0               (OpenGL window)\n" 		\
+		  "                             * drm://0               (drm rendering)\n" 		\
 		  "  --output-codec=CODEC   desired codec for compressed output streams:\n"		\
 		  "                            * h264 (default), h265\n"						\
 		  "                            * vp8, vp9\n"									\
@@ -109,6 +110,7 @@ class videoOutput
 public:
 
 	typedef void (*RenderCallback_t)(void* ptr);
+	typedef void (*KeyboardCallback_t)(void* ptr, int key, int scancode, int action, int mods);
 
 	/**
 	 * Create videoOutput interface from a videoOptions struct that's already been filled out.
@@ -214,7 +216,15 @@ public:
 	 * @param callback function
 	 * @param user pointer which will be passed to the callback 
 	 */
-	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb, void* uptr) {}
+	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb_init, videoOutput::RenderCallback_t cb_run, void* uptr) {}
+
+	/**
+	 * Sets keyboard callback 
+	 *
+	 * @param callback function
+	 * @param user pointer which will be passed to the callback 
+	 */
+	virtual void SetKeyboardCallback(videoOutput::KeyboardCallback_t key_cb, void* uptr) {}
 
 	/**
 	 * Begin streaming the device.

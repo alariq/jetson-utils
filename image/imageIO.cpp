@@ -22,8 +22,12 @@
  
 #include "imageIO.h"
 
+#if WITH_CUDA
 #include "cudaMappedMemory.h"
 #include "cudaColorspace.h"
+#else
+#include <cassert>
+#endif
 
 #include "filesystem.h"
 #include "logging.h"
@@ -168,7 +172,7 @@ bool loadImage( const char* filename, void** output, int* width, int* height, im
 
 	// allocate CUDA buffer for the image
 	const size_t imgSize = imageFormatSize(format, imgWidth, imgHeight);
-
+#if WITH_CUDA
 	if( !cudaAllocMapped((void**)output, imgSize) )
 	{
 		LogError(LOG_IMAGE "loadImage() -- failed to allocate %zu bytes for image '%s'\n", imgSize, filename);
@@ -200,6 +204,10 @@ bool loadImage( const char* filename, void** output, int* width, int* height, im
 		CUDA(cudaFreeHost(inputImgGPU));
 	}
 	else
+#else
+	assert( format != IMAGE_RGB32F && format != IMAGE_RGBA32F );
+	*output = malloc(imgSize);
+#endif
 	{
 		// uint8 output can be straight copied to GPU memory
 		memcpy(*output, img.get(), imgSize);
@@ -213,13 +221,13 @@ bool loadImage( const char* filename, void** output, int* width, int* height, im
 
 
 // loadImageRGBA
-bool loadImageRGBA( const char* filename, float4** output, int* width, int* height )
+bool loadImageRGBA( const char* filename, float** output, int* width, int* height )
 {
 	return loadImage(filename, (void**)output, width, height, IMAGE_RGBA32F);
 }
 
 // loadImageRGBA
-bool loadImageRGBA( const char* filename, float4** cpu, float4** gpu, int* width, int* height )
+bool loadImageRGBA( const char* filename, float** cpu, float** gpu, int* width, int* height )
 {
 	const bool result = loadImageRGBA(filename, gpu, width, height);
 
@@ -247,7 +255,7 @@ bool loadImageRGBA( const char* filename, float4** cpu, float4** gpu, int* width
 
 
 // saveImage
-bool saveImage( const char* filename, void* ptr, int width, int height, imageFormat format, int quality, const float2& pixel_range, bool sync )
+bool saveImageType( const char* filename, void* ptr, int width, int height, imageFormat format, int quality, const float pixel_range_min, const float pixel_range_max, bool sync )
 {
 	// validate parameters
 	if( !filename || !ptr || width <= 0 || height <= 0 )
@@ -285,7 +293,7 @@ bool saveImage( const char* filename, void* ptr, int width, int height, imageFor
 
 	// if needed, convert from float to uint8
 	const imageBaseType baseType = imageFormatBaseType(format);
-
+#if WITH_CUDA
 	if( baseType == IMAGE_FLOAT )
 	{
 		imageFormat outputFormat = IMAGE_UNKNOWN;
@@ -303,7 +311,7 @@ bool saveImage( const char* filename, void* ptr, int width, int height, imageFor
 			return false;
 		}
 
-		if( CUDA_FAILED(cudaConvertColor(ptr, format, img, outputFormat, width, height, pixel_range)) )  // TODO limit pixel
+		if( CUDA_FAILED(cudaConvertColor(ptr, format, img, outputFormat, width, height, make_float2(pixel_range_min, pixel_range_max))) )  // TODO limit pixel
 		{
 			LogError(LOG_IMAGE "saveImage() -- failed to convert image from %s to %s ('%s')\n", imageFormatToStr(format), imageFormatToStr(outputFormat), filename);
 			return false;
@@ -320,6 +328,12 @@ bool saveImage( const char* filename, void* ptr, int width, int height, imageFor
 			CUDA(cudaFreeHost(img)); \
 		return x;
 	
+#else
+	assert( baseType != IMAGE_FLOAT );
+
+	#define release_return(x) 	\
+		return x;
+#endif
 	// determine the file extension
 	const std::string ext = fileExtension(filename);
 	const char* extension = ext.c_str();
@@ -387,7 +401,16 @@ bool saveImage( const char* filename, void* ptr, int width, int height, imageFor
 
 
 // saveImageRGBA
+bool saveImageRGBA( const char* filename, float* ptr, int width, int height, float max_pixel, int quality )
+{
+	return saveImageType(filename, ptr, width, height, IMAGE_RGBA32F, quality, 0.0f, max_pixel);
+}
+
+#if WITH_CUDA
 bool saveImageRGBA( const char* filename, float4* ptr, int width, int height, float max_pixel, int quality )
 {
-	return saveImage(filename, ptr, width, height, IMAGE_RGBA32F, quality, make_float2(0, max_pixel));
+	return saveImageType(filename, ptr, width, height, IMAGE_RGBA32F, quality, 0.0f, max_pixel);
 }
+#endif
+
+

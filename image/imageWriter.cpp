@@ -28,7 +28,6 @@
 
 #include <strings.h>
 
-
 // supported image file extensions
 const char* imageWriter::SupportedExtensions[] = { "jpg", "jpeg", "png", 
 										 "tga", "targa", "bmp", 
@@ -118,7 +117,7 @@ bool imageWriter::Render( void* image, uint32_t width, uint32_t height, imageFor
 	//CUDA(cudaDeviceSynchronize());   // now done in saveImage()
 	
 	// save the image
-	if( !saveImage(mFileOut, image, width, height, format) )
+	if( !saveImageType(mFileOut, image, width, height, format) )
 	{
 		LogError(LOG_IMAGE "imageWriter -- failed to save '%s'\n", mFileOut);
 		return false;

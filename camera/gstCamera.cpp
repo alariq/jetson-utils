@@ -21,11 +21,12 @@
  */
 
 #include "gstCamera.h"
-
+#if WITH_CUDA
 #include "cudaColorspace.h"
+#endif
 #include "filesystem.h"
 #include "logging.h"
-#include "NvInfer.h"
+//#include "NvInfer.h"
 
 #include <gst/app/gstappsink.h>
 
@@ -74,7 +75,10 @@ gstCamera::~gstCamera()
 		mPipeline = NULL;
 	}
 	
-	SAFE_DELETE(mBufferManager);
+	if(mBufferManager) {
+		delete mBufferManager;
+		mBufferManager = nullptr;
+	}
 }
 
 

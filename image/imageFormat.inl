@@ -53,6 +53,8 @@ inline const char* imageFormatToStr( imageFormat format )
 		case IMAGE_GRAY8:	 	return "gray8";
 		case IMAGE_GRAY32F:  	return "gray32f";
 		case IMAGE_UNKNOWN: 	return "unknown";
+		default:
+			return "invalid_format";
 	};
 	
 	return "unknown";
@@ -146,9 +148,8 @@ inline imageBaseType imageFormatBaseType( imageFormat format )
 		case IMAGE_BGR32F:		
 		case IMAGE_RGBA32F: 
 		case IMAGE_BGRA32F:		return IMAGE_FLOAT;
+		default:                 return IMAGE_UINT8;
 	}
-
-	return IMAGE_UINT8;
 }
 
 
@@ -189,13 +190,13 @@ inline size_t imageFormatDepth( imageFormat format )
 	switch(format)
 	{
 		case IMAGE_RGB8:		
-		case IMAGE_BGR8:		return sizeof(uchar3) * 8;
+		case IMAGE_BGR8:		return sizeof(unsigned char) * 3 * 8;
 		case IMAGE_RGBA8:		
-		case IMAGE_BGRA8:		return sizeof(uchar4) * 8;
+		case IMAGE_BGRA8:		return sizeof(unsigned char) * 4 * 8;
 		case IMAGE_RGB32F:		
-		case IMAGE_BGR32F:		return sizeof(float3) * 8;
+		case IMAGE_BGR32F:		return sizeof(float) * 3 * 8;
 		case IMAGE_RGBA32F: 	
-		case IMAGE_BGRA32F:		return sizeof(float4) * 8;
+		case IMAGE_BGRA32F:		return sizeof(float) * 4 * 8;
 		case IMAGE_GRAY8:		return sizeof(unsigned char) * 8;
 		case IMAGE_GRAY32F:		return sizeof(float) * 8;
 		case IMAGE_I420:
@@ -234,11 +235,12 @@ template<typename T> inline imageFormat imageFormatFromType()
 	static_assert(__image_format_assert_false<T>::value, "invalid image format type - supported types are uchar3, uchar4, float3, float4"); 
 	return IMAGE_UNKNOWN;
 }
-
+#if WITH_CUDA
 template<> inline imageFormat imageFormatFromType<uchar3>()	{ return IMAGE_RGB8; }
 template<> inline imageFormat imageFormatFromType<uchar4>()	{ return IMAGE_RGBA8; }
 template<> inline imageFormat imageFormatFromType<float3>()	{ return IMAGE_RGB32F; }
 template<> inline imageFormat imageFormatFromType<float4>()	{ return IMAGE_RGBA32F; }
+#endif
 
 
 // imageFormatErrorMsg

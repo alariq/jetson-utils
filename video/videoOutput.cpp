@@ -27,6 +27,9 @@
 #ifdef WITH_IMGUI
 #include "dearimgui.h"
 #endif
+#ifdef WITH_DRM
+#include "drmRenderer.h"
+#endif
 #include "gstEncoder.h"
 
 #include "logging.h"
@@ -44,8 +47,12 @@ videoOutput::~videoOutput()
 {
 	const uint32_t numOutputs = mOutputs.size();
 
-	for( uint32_t n=0; n < numOutputs; n++ )
-		SAFE_DELETE(mOutputs[n]);
+	for( uint32_t n=0; n < numOutputs; n++ ) {
+		if(mOutputs[n] != NULL) {
+			delete mOutputs[n]; 
+			mOutputs[n] = NULL;
+		}
+	}
 }
 
 
@@ -54,9 +61,14 @@ static videoOutput* createDisplaySubstream( videoOutput* output, videoOptions& o
 {
 	const bool headless = cmdLine.GetFlag("no-display") | cmdLine.GetFlag("headless");
 
-	if( options.resource.protocol != "display" && !headless )
+	if( (options.resource.protocol != "display" && options.resource.protocol != "drm") && !headless )
 	{
+// prefer drm on rknn, both are supported, but on rknn display requires some code changes
+#if WITH_CUDA
 		options.resource = "display://0";
+#else
+		options.resource = "drm://0";
+#endif
 		videoOutput* display = videoOutput::Create(options);
 
 		if( !display )
@@ -76,7 +88,11 @@ static void applyDisplayFlags( videoOutput* output, const commandLine& cmdLine )
 	if( !output )
 		return;
 	
-	if( output->IsType(glDisplay::Type) || output->IsType(DearImguiDisplay::Type) )
+	if( output->IsType(glDisplay::Type)
+#if WITH_IMGUI
+			|| output->IsType(DearImguiDisplay::Type)
+#endif
+	)
 	{
 		glDisplay* display = (glDisplay*)output;
 		
@@ -110,14 +126,23 @@ videoOutput* videoOutput::Create( const videoOptions& options )
 	{
 		output = gstEncoder::Create(options);
 	}
+#ifdef WITH_DRM
+	else if( uri.protocol == "drm" )
+	{
+		output = drmRenderer::Create(options);
+	}
+#endif
+
+#if WITH_DISPLAY
 	else if( uri.protocol == "display" )
 	{
-#ifdef WITH_IMGUI
+#if WITH_IMGUI
 		output = DearImguiDisplay::Create(options);
 #else
 		output = glDisplay::Create(options);
 #endif
 	}
+#endif
 	else
 	{
 		LogError(LOG_VIDEO "videoOutput -- unsupported protocol (%s)\n", uri.protocol.size() > 0 ? uri.protocol.c_str() : "null");
@@ -246,6 +271,8 @@ const char* videoOutput::TypeToStr( uint32_t type )
 		return "gstEncoder";
 	else if( type == imageWriter::Type )
 		return "imageWriter";
+	else if( type == drmRenderer::Type )
+		return "drmRenderer";
 
 	LogWarning(LOG_VIDEO "unknown videoOutput type - %u\n", type);
 	return "(unknown)";

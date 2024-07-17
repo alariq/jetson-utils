@@ -74,15 +74,17 @@ public:
 	 */
 	inline void Free();
 
+	inline void Unmap(void* mapped_ptr);
+
 	/**
 	 * Get the next read/write buffer without advancing the position in the queue.
 	 */
-	inline void* Peek( uint32_t flags );
+	inline void* Peek( uint32_t flags, bool b_map = true );
 
 	/**
 	 * Get the next read/write buffer and advance the position in the queue.
 	 */
-	inline void* Next( uint32_t flags );
+	inline void* Next( uint32_t flags, bool b_map = true );
 
 	/**
 	 * Get the flags of the ring buffer.
@@ -107,6 +109,7 @@ protected:
 	uint32_t mFlags;
 
 	void** mBuffers;
+	void** mMappedPtrs;
 	size_t mBufferSize;
 	bool   mReadOnce;
 	Mutex  mMutex;

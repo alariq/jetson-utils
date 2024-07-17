@@ -23,8 +23,13 @@
 #ifndef __OPENGL_UTILITY_H
 #define __OPENGL_UTILITY_H
 
-
+#if defined(USE_OPENGL_ES2)
+#include <GLES2/gl2.h>          // Use GL ES 2
+#include <GLES2/gl2ext.h>       // Use GL ES 2
+#else
 #include <GL/glew.h>
+#endif
+#include <GL/glu.h>
 #include <GL/glx.h>
 
 #include <stdio.h>

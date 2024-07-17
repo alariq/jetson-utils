@@ -22,8 +22,9 @@
 
 #include "gstDecoder.h"
 #include "gstWebRTC.h"
-
+#if WITH_CUDA
 #include "cudaColorspace.h"
+#endif
 #include "filesystem.h"
 #include "logging.h"
 
@@ -122,7 +123,10 @@ gstDecoder::~gstDecoder()
 	
 	destroyPipeline();
 	
-	SAFE_DELETE(mBufferManager);
+	if(mBufferManager) {
+		delete mBufferManager;
+		mBufferManager = nullptr;
+	}
 }
 
 
@@ -955,13 +959,13 @@ bool gstDecoder::Capture( void** output, imageFormat format, uint64_t timeout, i
 	
 	// verify the output pointer exists
 	if( !output )
-		RETURN_STATUS(ERROR);
+		RETURN_STATUS(videoSource::ERROR);
 
 	// confirm the stream is open
 	if( !mStreaming || mEOS )
 	{
 		if( !Open() )
-			RETURN_STATUS(mEOS ? EOS : ERROR);
+			RETURN_STATUS(mEOS ? videoSource::EOS : videoSource::ERROR);
 	}
 
 	// wait until a new frame is recieved
@@ -970,19 +974,19 @@ bool gstDecoder::Capture( void** output, imageFormat format, uint64_t timeout, i
 	if( result < 0 )
 	{
 		LogError(LOG_GSTREAMER "gstDecoder::Capture() -- an error occurred retrieving the next image buffer\n");
-		RETURN_STATUS(ERROR);
+		RETURN_STATUS(videoSource::ERROR);
 	}
 	else if( result == 0 )
 	{
 		//sebi: ok if we are paused(actually instead of capture, app should subscribe to a new buffer, but ok...)
 		LogVerbose(LOG_GSTREAMER "gstDecoder::Capture() -- a timeout occurred waiting for the next image buffer\n");
-		RETURN_STATUS(TIMEOUT);
+		RETURN_STATUS(videoSource::TIMEOUT);
 	}
 		
 	mLastTimestamp = mBufferManager->GetLastTimestamp();
 	mRawFormat = mBufferManager->GetRawFormat();
 	
-	RETURN_STATUS(OK);
+	RETURN_STATUS(videoSource::OK);
 }
 
 #if 0

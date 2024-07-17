@@ -100,8 +100,13 @@ imageLoader::~imageLoader()
 {
 	const size_t numBuffers = mBuffers.size();
 
-	for( size_t n=0; n < numBuffers; n++ )
+	for( size_t n=0; n < numBuffers; n++ ) {
+#if WITH_CUDA
 		CUDA(cudaFreeHost(mBuffers[n]));
+#else
+		free(mBuffers[n]);
+#endif
+	}
 
 	mBuffers.clear();
 }
@@ -151,7 +156,11 @@ bool imageLoader::Capture( void** output, imageFormat format, uint64_t timeout, 
 	// reclaim old buffers
 	if( mBuffers.size() >= mOptions.numBuffers )
 	{
+#if WITH_CUDA
 		CUDA(cudaFreeHost(mBuffers[0]));
+#else
+		free(mBuffers[0]);
+#endif
 		mBuffers.erase(mBuffers.begin());
 	}
 

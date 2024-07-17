@@ -19,9 +19,16 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  */
- 
+
+
 #include "glDisplay.h"
+#if WITH_CUDA
 #include "cudaNormalize.h"
+#endif
+#if WITH_OPENCL
+#include "ocl_utils.h"
+#include <cassert>
+#endif
 #include "timespec.h"
 
 #include <X11/Xatom.h>
@@ -30,6 +37,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+bool b_use_opencl = false;
 
 //--------------------------------------------------------------
 std::vector<glDisplay*> gDisplays;
@@ -131,12 +139,14 @@ void glDisplay::ReleaseRenderResources()
 
 	mTextures.clear();
 
+#if WITH_CUDA
 	// free CUDA memory used for normalization
 	if( mNormalizedCUDA != NULL )
 	{
 		CUDA(cudaFree(mNormalizedCUDA));
 		mNormalizedCUDA = NULL;
 	}
+#endif
 
 }
 
@@ -213,6 +223,7 @@ glDisplay* glDisplay::Create( const videoOptions& options )
 		return NULL;
 	}
 	
+#if !defined(USE_OPENGL_ES2)
 	GLenum err = glewInit();
 	
 	if (GLEW_OK != err)
@@ -221,6 +232,7 @@ glDisplay* glDisplay::Create( const videoOptions& options )
 		delete vp;
 		return NULL;
 	}
+#endif
 	
 	vp->mID = gDisplays.size();
 	gDisplays.push_back(vp);
@@ -235,6 +247,14 @@ glDisplay* glDisplay::Create( const videoOptions& options )
 {
 	return Create(DEFAULT_TITLE, r, g, b, a);
 }*/
+
+GLXContext glDisplay::GetGLXContext() const {
+	return mContextGL;
+}
+
+Display* glDisplay::GetX11Display() const {
+	return mDisplayX;
+}
 
 
 // initWindow
@@ -456,7 +476,8 @@ void glDisplay::BeginRender( bool processEvents )
 	GL(glXMakeCurrent(mDisplayX, mWindowX, mContextGL));
 
 	GL(glClearColor(mBgColor[0], mBgColor[1], mBgColor[2], mBgColor[3]));
-	GL(glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT));
+	// was experiencincing crash on RK3566 with clearing all bit (probably because no depth stencil buffer is used, but...)
+	GL(glClear(GL_COLOR_BUFFER_BIT));//|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT));
 
 	activateViewport();	
 }
@@ -567,16 +588,19 @@ glTexture* glDisplay::PrepareImage( void* img, uint32_t width, uint32_t height, 
 {
 	if( !img || width == 0 || height == 0 )
 		return nullptr;
+
+	SCOPED_TIMER("PrepareImage");
 	
 	// obtain the OpenGL texture to use
 	glTexture* interopTex = allocTexture(width, height, format);
 
 	if( !interopTex )
 		return nullptr;
-	
+
 	// normalize pixels from [0,255] -> [0,1]
 	if( normalize && (format == IMAGE_RGB32F || format == IMAGE_RGBA32F) )
 	{
+#if WITH_CUDA	
 		if( !mNormalizedCUDA || mNormalizedWidth < width || mNormalizedHeight < height )
 		{
 			if( mNormalizedCUDA != NULL )
@@ -605,9 +629,12 @@ glTexture* glDisplay::PrepareImage( void* img, uint32_t width, uint32_t height, 
 		}
 
 		img = mNormalizedCUDA;
+#else
+	assert(0 && "Normalize is not implemented");
+#endif
 	}
 
-	// map from CUDA to openGL using GL interop
+#if WITH_CUDA
 	void* tex_map = interopTex->Map(GL_MAP_CUDA, GL_WRITE_DISCARD); //interopTex->MapCUDA();
 
 	if( tex_map != NULL )
@@ -616,6 +643,69 @@ glTexture* glDisplay::PrepareImage( void* img, uint32_t width, uint32_t height, 
 		//CUDA(cudaDeviceSynchronize());
 		interopTex->Unmap();
 	}
+#elif WITH_OPENCL
+
+	if(b_use_opencl) {
+		//clFinish(ocl_get_queue());
+		void* tex_map = interopTex->Map(GL_MAP_OPENCL, GL_WRITE_DISCARD);
+		if(tex_map != nullptr) {
+			OCL(clEnqueueCopyBuffer(ocl_get_queue(), (cl_mem)img, (cl_mem)tex_map, 0, 0, interopTex->GetSize(), 0, nullptr, nullptr));
+			interopTex->Unmap();
+		} else {
+			LogError("No interop\n");
+		}
+	} else {
+		cl_int status;
+		void* tex_map = nullptr;
+		{ SCOPED_TIMER("interopTex->Map");
+			void* mapped_ptr = clEnqueueMapBuffer(ocl_get_queue(), (cl_mem)img, CL_TRUE, CL_MAP_READ, 0, interopTex->GetSize(), 0, nullptr, nullptr, &status);
+			CHECK_OPENCL_ERROR_NORET(status, "clEnqueueMapBuffer");
+			interopTex->Update(GL_MAP_CPU, mapped_ptr);
+			clEnqueueUnmapMemObject(ocl_get_queue(), (cl_mem)img, mapped_ptr, 0, nullptr, nullptr);
+			CHECK_OPENCL_ERROR_NORET(status, "clEnqueueMapBuffer");
+		}
+#if 0
+		tex_map = interopTex->Map(GL_MAP_CPU, GL_WRITE_DISCARD);
+		if(tex_map != nullptr) {
+
+			void* mapped_ptr = nullptr;
+			{ SCOPED_TIMER("clEnqueueMapBuffer");
+				// TODO: img can be not OpenCL buffer if videoSource is not supporting it, so better have some struct describing input buffer, otherwise
+				// will have an error when mapping the img 
+			mapped_ptr = clEnqueueMapBuffer(ocl_get_queue(), (cl_mem)img, CL_TRUE, CL_MAP_READ, 0, interopTex->GetSize(), 0, nullptr, nullptr, &status);
+			}
+			CHECK_OPENCL_ERROR_NORET(status, "clEnqueueMapBuffer");
+			if(mapped_ptr) {
+				{ SCOPED_TIMER("memcpy");
+				memcpy(tex_map, mapped_ptr, interopTex->GetSize());
+				}
+#define DUMP_IMAGES 0
+#if DUMP_IMAGES
+				LogVerbose("Copy %d bytes of gstData\n", interopTex->GetSize());
+				int static counter = 0;
+				char fname[256];
+				sprintf(&fname[0], "dump/dump%d_rgb.img", counter++);
+				if(FILE* f = fopen(fname, "wb")) {
+					fwrite(tex_map, interopTex->GetSize(), 1, f); 
+					fclose(f);
+				}
+#endif
+
+				clEnqueueUnmapMemObject(ocl_get_queue(), (cl_mem)img, mapped_ptr, 0, nullptr, nullptr);
+				CHECK_OPENCL_ERROR_NORET(status, "clEnqueueMapBuffer");
+			} else {
+				LogError("Failed to map OpenCL\n");
+			}
+			interopTex->Unmap();
+		} else {
+			LogError("Failed to map\n");
+		}
+#endif
+	}
+#else
+	assert(0 && "Not supported yet");
+#endif
+
 
 	return interopTex;
 }

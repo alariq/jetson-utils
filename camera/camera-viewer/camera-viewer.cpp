@@ -119,8 +119,8 @@ int main( int argc, char** argv )
 	 */
 	printf("\ncamera-viewer:  shutting down...\n");
 	
-	SAFE_DELETE(camera);
-	SAFE_DELETE(display);
+	delete camera;
+	delete display;
 
 	printf("camera-viewer:  shutdown complete.\n");
 	return 0;

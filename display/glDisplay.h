@@ -589,6 +589,10 @@ public:
 
 	///@}
 
+
+	virtual struct __GLXcontextRec* GetGLXContext() const;
+	virtual struct _XDisplay* GetX11Display() const;
+
 protected:
 	glDisplay( const videoOptions& options );
 		

@@ -3,8 +3,10 @@
 #include "glDisplay.h"
 #include "glTexture.h"
 #include "imageFormat.h"
+#include "timespec.h"
 
 //#include "imgui.h"
+#define IMGUI_IMPL_OPENGL_DEBUG
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "implot.h"
@@ -12,6 +14,17 @@
 #include <stdint.h>
 
 #include <GLFW/glfw3.h>
+
+#define GLFW_EXPOSE_NATIVE_GLX
+#define GLFW_EXPOSE_NATIVE_X11
+#define GLFW_EXPOSE_NATIVE_EGL
+//#define GLFW_NATIVE_INCLUDE_NONE
+#include <GLFW/glfw3native.h>
+
+#include <X11/Xlib.h> // Display
+#include <GL/glx.h> // Context
+//#include <EGL/egl.h> // Context/Display
+
 
 extern uint32_t glAddDisplay(glDisplay* display);
 
@@ -63,13 +76,20 @@ bool DearImguiDisplay::Init()
 	glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
 	glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
 	glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+	//glfwWindowHint(GLFW_DOUBLEBUFFER, 0);
+	LogInfo("dearimgui: Refresh rate: %d\n", mode->refreshRate);
 
-	GLFWwindow* window = glfwCreateWindow(mOptions.width, mOptions.height, "Dear ImGui GLFW+OpenGL3", nullptr, nullptr);
+	//GLFWwindow* window = glfwCreateWindow(mOptions.width, mOptions.height, "Dear ImGui GLFW+OpenGL3", nullptr, nullptr);
+	GLFWwindow* window = glfwCreateWindow(mode->width, mode->height, "Dear ImGui GLFW+OpenGL3", nullptr, nullptr);
 	if (window == nullptr)
 		return false;
 	glfwWindow_ = window;
 	glfwMakeContextCurrent(window);
 	glfwSwapInterval(mOptions.swapInterval);
+
+	if(!glfwExtensionSupported("GLX_EXT_swap_control_tear")) {
+		LogInfo("dearimgui GLX_EXT_swap_control_tear NOT supported");
+	}
 
 	glfwSetKeyCallback(glfwWindow_, keyCallback);
 	glfwSetWindowUserPointer(glfwWindow_, this);
@@ -77,26 +97,28 @@ bool DearImguiDisplay::Init()
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-    ImPlot::CreateContext();
-    ImGuiIO& io = ImGui::GetIO(); (void)io;
-	
+     ImPlot::CreateContext();
+     ImGuiIO& io = ImGui::GetIO(); (void)io;
+
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
 	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsLight();
+	//ImGui::StyleColorsDark();
+	ImGui::StyleColorsLight();
+	ImPlot::StyleColorsLight();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
-
+#if !defined(USE_OPENGL_ES2)
 	GLenum err = glewInit();
 	if (GLEW_OK != err) {
 		LogError(LOG_GL "GLEW Error: %s\n", glewGetErrorString(err));
 		return false;
 	}
+#endif
 
 	mScreenWidth  = mOptions.width;
 	mScreenHeight = mOptions.height;
@@ -115,17 +137,44 @@ bool DearImguiDisplay::Init()
 	return true;
 }
 
+GLXContext DearImguiDisplay::GetGLXContext() const {
+	return glfwGetGLXContext(glfwWindow_);
+}
+
+Display* DearImguiDisplay::GetX11Display() const {
+	return glfwGetX11Display();
+}
+
+EGLContext DearImguiDisplay::GetEGLContext() const {
+	return glfwGetEGLContext(glfwWindow_);
+}
+
+EGLDisplay DearImguiDisplay::GetEGLDisplay() const {
+	return glfwGetEGLDisplay();
+}
+
 void DearImguiDisplay::keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	DearImguiDisplay* me = (DearImguiDisplay*)glfwGetWindowUserPointer(window);
 	if (key == GLFW_KEY_F && action == GLFW_PRESS) {
 		me->mImmersionMode = !me->mImmersionMode;
 	}
+
+	if(me->key_cb_) {
+		me->key_cb_(me->key_cb_uptr_, key, scancode, action, mods);
+	}
 }
 
 bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imageFormat format)
 {
+	SCOPED_TIMER("DearImguiDisplay::Render");
+
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+	if(render_init_cb_ && !b_render_init_called) {
+		render_init_cb_(uptr_);
+		b_render_init_called = true;
+	}
 
 	glfwPollEvents();
 
@@ -287,7 +336,11 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 		render_cb_(uptr_);
 	}
 
+
+	{
+	SCOPED_TIMER("ImGui::Render");
 	ImGui::Render();
+	}
 	int display_w, display_h;
 	glfwGetFramebufferSize(glfwWindow_, &display_w, &display_h);
 	glViewport(0, 0, display_w, display_h);
@@ -298,7 +351,10 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	// render sub-streams
 	const bool substreams_success = videoOutput::Render(image, width, height, format);
 
+	{
+	SCOPED_TIMER("ImGui_ImplOpenGL3_RenderDrawData");
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	}
 
 	// update viewport
 	mOptions.width = display_w;
@@ -322,7 +378,10 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 		}
 	}
 	
+	{
+	SCOPED_TIMER("glfwSwapBuffers");
 	glfwSwapBuffers(glfwWindow_);
+	}
 
 	if(bDragFinished && drag_finished_cb_) {
 		int bbX0 = mLastBBox[0];
