@@ -23,7 +23,7 @@
 #include "gstUtility.h"
 #include "filesystem.h"
 
-#include "NvInfer.h"
+//#include "NvInfer.h"
 #include "logging.h"
 
 #include <stdint.h>

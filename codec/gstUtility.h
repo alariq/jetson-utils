@@ -27,7 +27,7 @@
 #include <sstream>
 
 #include "videoOptions.h"
-#include "NvInfer.h"
+//#include "NvInfer.h"
 
 
 /**
