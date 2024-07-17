@@ -356,7 +356,10 @@ bool gstEncoder::buildLaunchStr()
 	}
 	else if( mOptions.codec != videoOptions::CODEC_MJPEG )
 	{
+		// property has a different hame (bps) for MPP
+		if(mOptions.codecType != videoOptions::CODEC_MPP) {
 		ss << "bitrate=" << mOptions.bitRate << " ";
+		}
 		
 		if( mOptions.deviceType == videoOptions::DEVICE_IP )
 		{

@@ -44,6 +44,9 @@ gstCamera::gstCamera( const videoOptions& options ) : videoSource(options)
 	mFormatYUV = IMAGE_UNKNOWN;
 	mEOS       = false;
 	
+	mCustomWidth = 0;
+	mCustomHeight = 0;
+	
 	mBufferManager = new gstBufferManager(&mOptions);
 }
 
@@ -248,6 +251,12 @@ bool gstCamera::buildLaunchStr()
 			}
 
 			ss << decoder << " name=decoder ";  //ss << "nvjpegdec ! video/x-raw ! "; //ss << "jpegparse ! nvv4l2decoder mjpeg=1 ! video/x-raw(memory:NVMM) ! nvvidconv ! video/x-raw ! "; //
+			if(mCustomWidth!=0 && mCustomHeight!=0) {
+				if(mOptions.codecType == videoOptions::CODEC_MPP) {
+					// if scaling is applied image is changing its format or something goes wrong, need investigation
+					ss << " width="<<mCustomWidth<<" "<<"height="<<mCustomHeight<<" ";//<<"format=NV12 "; 
+				} 
+			}
 	
 			if( mOptions.codecType == videoOptions::CODEC_V4L2 && mOptions.codec != videoOptions::CODEC_MJPEG )
 				ss << "enable-max-performance=1 ";
@@ -258,6 +267,15 @@ bool gstCamera::buildLaunchStr()
 				ss << "video/x-raw(memory:NVMM) ! ";  // V4L2 codecs can only output NVMM
 			else
 				ss << "video/x-raw ! ";
+
+    #if defined(__aarch64__)
+		if(mCustomWidth!=0 && mCustomHeight!=0 && mOptions.codecType == videoOptions::CODEC_CPU) {
+			ss << "videoscale ! video/x-raw,";
+			ss << " width=" << mCustomWidth<< ", height=" << mCustomHeight<< " ! ";//, format=(string)NV12";
+		}
+    #endif
+
+
 		}
 
 	#if defined(__aarch64__)
@@ -473,9 +491,13 @@ bool gstCamera::discover()
 	// check desired frame sizes
 	if( mOptions.width == 0 )
 		mOptions.width = DefaultWidth;
+	else
+		mCustomWidth = mOptions.width;
 
 	if( mOptions.height == 0 )
 		mOptions.height = DefaultHeight;
+	else
+		mCustomHeight = mOptions.height;
 	
 	if( mOptions.frameRate <= 0 )
 		mOptions.frameRate = 30;

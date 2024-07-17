@@ -460,6 +460,7 @@ const char* videoOptions::CodecTypeToStr( videoOptions::CodecType codec )
 		case CODEC_V4L2:  return "v4l2";
 		case CODEC_NVENC: return "nvenc";
 		case CODEC_NVDEC: return "nvdec";
+		case CODEC_MPP: return "mpp";
 	}
 	
 	return nullptr;
@@ -472,7 +473,7 @@ videoOptions::CodecType videoOptions::CodecTypeFromStr( const char* str )
 	if( !str )
 		return gst_default_codec();
 
-	for( int n=0; n <= CODEC_NVDEC; n++ )
+	for( int n=0; n <= CODEC_MPP; n++ )
 	{
 		const CodecType value = (CodecType)n;
 

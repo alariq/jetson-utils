@@ -227,6 +227,9 @@ private:
 	std::string  mLaunchStr;
 	imageFormat  mFormatYUV;
 	
+	int mCustomWidth;
+	int mCustomHeight;
+	
 	gstBufferManager* mBufferManager;
 };
 

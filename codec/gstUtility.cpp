@@ -449,7 +449,7 @@ const char* gst_select_decoder( videoOptions::Codec codec, videoOptions::CodecTy
 	if( type == videoOptions::CODEC_NVENC || type == videoOptions::CODEC_NVDEC )
 		type = gst_default_codec();
 	
-	if( codec == videoOptions::CODEC_MJPEG )
+	if( codec == videoOptions::CODEC_MJPEG && type != videoOptions::CODEC_MPP )
 		type = videoOptions::CODEC_CPU;
 	
 	if( codec == videoOptions::CODEC_RAW )
@@ -500,6 +500,13 @@ const char* gst_select_decoder( videoOptions::Codec codec, videoOptions::CodecTy
 			return "nvjpegdec";
 		
 		return "nvv4l2decoder";
+	}
+	else if( type == videoOptions::CODEC_MPP )
+	{
+		if( codec == videoOptions::CODEC_MJPEG )
+			return "mppjpegdec";
+
+		return "mppvideodec";
 	}
 	
 	return NULL;
@@ -609,6 +616,16 @@ const char* gst_select_encoder( videoOptions::Codec codec, videoOptions::CodecTy
 			case videoOptions::CODEC_VP8:	   return "nvv4l2vp8enc";
 			case videoOptions::CODEC_VP9:    return "nvv4l2vp9enc";
 			case videoOptions::CODEC_MJPEG:  return "nvjpegenc";
+		}
+	}
+	else if( type == videoOptions::CODEC_MPP )
+	{
+		switch(codec)
+		{
+			case videoOptions::CODEC_H264:   return "mpph264enc";
+			case videoOptions::CODEC_H265:   return "mpph265enc";
+			case videoOptions::CODEC_MJPEG:  return "mppjpegenc";
+			case videoOptions::CODEC_VP8:    return "mppvp8enc";
 		}
 	}
 	

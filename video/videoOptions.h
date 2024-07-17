@@ -248,7 +248,8 @@ public:
 		CODEC_OMX,	 /**< aarch64 & JetPack 4 only - OMX hardware plugins (e.g. omxh264dec/omxh264enc) */
 		CODEC_V4L2,	 /**< aarch64 & JetPack 5 only - V4L2 hardware plugins (e.g. nvv4l2decoder/nvv4l2h264enc) */
 		CODEC_NVENC,	 /**< x86 only - NVENC hardware plugin (not currently implemented) */
-		CODEC_NVDEC	 /**< x86 only - NVDEC hardware plugin (not currently implemented) */
+		CODEC_NVDEC,	 /**< x86 only - NVDEC hardware plugin (not currently implemented) */
+		CODEC_MPP       /**< aarch64 & RockChip only */
 	};
 	
 	/**
