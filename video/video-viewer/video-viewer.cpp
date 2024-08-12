@@ -184,6 +184,14 @@ void render_run(void* uptr, uint32_t tex_id) {
 			ImGui::GetForegroundDrawList()->AddText(pmin, IM_COL32( 255, 255, 0, 255 ), "Simple text");
 			ImGui::PopFont();
 		}
+
+		const ImVec2 pipMin = ImVec2(0.65*vMax.x, 0);
+		const ImVec2 pipMax = ImVec2(vMax.x, 0.35*vMax.y);
+		const float pipSize = 0.25f;
+		const float pipHalfSize = 0.5f*pipSize;
+		const ImVec2 pipUVmin = ImVec2(0.5f - pipHalfSize, 0.5f - pipHalfSize);
+		const ImVec2 pipUVmax = ImVec2(0.5f + pipHalfSize, 0.5f + pipHalfSize);
+		ImGui::GetForegroundDrawList()->AddImage((void*)(intptr_t)tex_id, pipMin, pipMax, pipUVmin, pipUVmax);
 	}
 
 	if(output->GetType() != DearImguiDisplay::Type) {
