@@ -123,7 +123,7 @@ void render_init(void* uptr) {
 #endif
 }
 
-void render_run(void* uptr) {
+void render_run(void* uptr, uint32_t tex_id) {
 
 	SCOPED_TIMER("imgui render");
 

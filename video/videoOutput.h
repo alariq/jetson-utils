@@ -110,6 +110,8 @@ class videoOutput
 public:
 
 	typedef void (*RenderCallback_t)(void* ptr);
+	// gl texture id passed, which is created from the image passed in Render()
+	typedef void (*RenderRunCallback_t)(void* ptr, uint32_t tex_id);
 	typedef void (*KeyboardCallback_t)(void* ptr, int key, int scancode, int action, int mods);
 
 	/**
@@ -216,7 +218,7 @@ public:
 	 * @param callback function
 	 * @param user pointer which will be passed to the callback 
 	 */
-	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb_init, videoOutput::RenderCallback_t cb_run, void* uptr) {}
+	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb_init, videoOutput::RenderRunCallback_t cb_run, void* uptr) {}
 
 	/**
 	 * Sets keyboard callback 

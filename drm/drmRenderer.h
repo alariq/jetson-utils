@@ -40,7 +40,7 @@ public:
 	 */
 	static const uint32_t Type = (1 << 7);
 
-	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb_init, videoOutput::RenderCallback_t cb_run, void* uptr) override {
+	virtual void SetRenderCallback(videoOutput::RenderCallback_t cb_init, videoOutput::RenderRunCallback_t cb_run, void* uptr) override {
 		render_init_cb_ = cb_init;
 		render_cb_ = cb_run;
 		uptr_ = uptr;
@@ -55,7 +55,7 @@ protected:
 	bool init();
 
 	videoOutput::RenderCallback_t render_init_cb_;
-	videoOutput::RenderCallback_t render_cb_;
+	videoOutput::RenderRunCallback_t render_cb_;
 	void* uptr_;
 	bool b_init_called = false;
 };

@@ -586,11 +586,9 @@ static void draw_fs_quad(unsigned i)
 
 	glUniformMatrix4fv(gl.modelviewprojectionmatrix, 1, GL_FALSE, &modelviewprojection.m[0][0]);
 
-	if(b_textured_cube) {
-		glUniform1i(gl.texture, 0); /* '0' refers to texture unit 0. */
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, dyn_texture.glTex->GetID());
-	}
+	glUniform1i(gl.texture, 0); /* '0' refers to texture unit 0. */
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, dyn_texture.glTex->GetID());
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
@@ -835,7 +833,7 @@ bool drmRenderer::RenderGBM( void* image, uint32_t width, uint32_t height, image
 	//draw_cube_smooth(rfc.i++);
 	if(render_cb_) {
 		SCOPED_TIMER("render_cb_");
-		(*render_cb_)(uptr_);
+		(*render_cb_)(uptr_, dyn_texture.glTex->GetID());
 	}
 
 	struct gbm_bo *next_bo;

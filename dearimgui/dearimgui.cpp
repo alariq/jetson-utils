@@ -268,6 +268,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	//glDisplay::Render(image, width, height, format);
 	ImVec2 imgWinSize = ImVec2(0,0);
 	bool display_success = true;
+	glTexture* tex = nullptr;
 	if (image || last_rendered_image_) {
 
 		// determine input format
@@ -286,7 +287,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 			//if(!interopTex) {
 			//}
 
-			glTexture* tex = last_rendered_image_;
+			tex = last_rendered_image_;
 			if(image) {
 				tex = PrepareImage(image, width, height, format, 0, 0, true);
 				last_rendered_image_ = tex;
@@ -333,7 +334,7 @@ bool DearImguiDisplay::Render(void* image, uint32_t width, uint32_t height, imag
 	}
 
 	if(render_cb_ /*&& !mImmersionMode*/) {
-		render_cb_(uptr_);
+		render_cb_(uptr_, tex ? tex->GetID() : 0);
 	}
 
 
