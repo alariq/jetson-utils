@@ -374,6 +374,7 @@ public:
 	virtual int GetPosition() { return 0; } 
 	virtual int CalculateCurrentFrame() { return 0; }
 	virtual int64_t GetTimePosition() { return 0; }
+	virtual int GetFramePosition() { return 0; }
 	virtual void SetTimePosition(int64_t ) { }
 	virtual int64_t GetFrameDuration() { return 0;  }
 	virtual int64_t GetDuration() { return 0;  }

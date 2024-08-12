@@ -92,6 +92,8 @@ imageLoader::imageLoader( const videoOptions& options ) : videoSource(options)
 		LogError(LOG_IMAGE "imageLoader -- failed to find any image files under '%s'\n", options.resource.location.c_str());
 		return;
 	}
+
+	mOptions.frameCount = mFiles.size();
 }
 
 
@@ -166,7 +168,10 @@ bool imageLoader::Capture( void** output, imageFormat format, uint64_t timeout, 
 
 	// get the next file to load
 	const size_t currFile = mNextFile;
-	mNextFile++;
+
+	if(!mbPaused) {
+		mNextFile++;
+	}
 	
 	if( mNextFile >= mFiles.size() )
 	{
@@ -224,4 +229,34 @@ void imageLoader::Close()
 	mStreaming = false;
 }
 
+bool imageLoader::SeekToFrame(uint32_t frame) {
 
+	if(mFiles.size() == 0) {
+		mNextFile = 0;
+		return false;
+	}
+
+	if( frame + 1 >= mFiles.size() && mFiles.size() > 0) {
+		return false;
+	}
+
+	mNextFile  = frame;
+	return true;
+}
+
+bool imageLoader::Pause(bool pause) {
+	mbPaused = pause;
+	return true;
+}
+
+bool imageLoader::IsPaused() {
+	return mbPaused;
+}
+
+int imageLoader::GetPosition() {
+	return mNextFile;
+}
+
+int imageLoader::GetFramePosition() {
+	return mNextFile;
+}

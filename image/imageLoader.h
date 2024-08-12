@@ -128,6 +128,12 @@ public:
 	 */
 	static bool IsSupportedExtension( const char* ext );
 
+	virtual bool SeekToFrame(uint32_t frame);
+	virtual bool Pause(bool pause);
+	virtual bool IsPaused();
+	virtual int GetPosition();
+	virtual int GetFramePosition();
+
 protected:
 	imageLoader( const videoOptions& options );
 
@@ -136,6 +142,8 @@ protected:
 	bool mEOS;
 	size_t mLoopCount;
 	size_t mNextFile;
+
+	bool mbPaused = false;
 	
 	std::vector<std::string> mFiles;
 	std::vector<void*> mBuffers;
