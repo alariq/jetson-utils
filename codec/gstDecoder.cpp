@@ -1073,7 +1073,8 @@ bool gstDecoder::Open()
 	checkMsgBus();
 
 	//sebi
-	if (!gst_element_query_duration(mPipeline, GST_FORMAT_TIME, &mDurationNanos))
+    mDurationNanos = 0;
+    if (!gst_element_query_duration(mPipeline, GST_FORMAT_TIME, &mDurationNanos))
 	{
 		LogWarning(LOG_GSTREAMER "gstDecoder -- Can't get duration\n");
 	} else {
