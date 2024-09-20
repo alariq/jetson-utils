@@ -25,7 +25,9 @@
 #if WITH_CUDA
 #include "cudaMappedMemory.h"
 #include "cudaColorspace.h"
-#else
+#endif
+#if WITH_OPENCL
+#include "oclColorspace.h"
 #include <cassert>
 #endif
 
@@ -327,11 +329,48 @@ bool saveImageType( const char* filename, void* ptr, int width, int height, imag
 		if( baseType == IMAGE_FLOAT ) \
 			CUDA(cudaFreeHost(img)); \
 		return x;
-	
-#else
-	assert( baseType != IMAGE_FLOAT );
 
+#elif WITH_OPENCL
+
+	if( baseType == IMAGE_FLOAT )
+	{
+		LogError(LOG_OCL "imageIO -- float format is not supported yet when OpenCL is used\n");
+		return false;
+	}
+
+#if 0
+	cl_mem_flags mem_flags = CL_MEM_READ_WRITE|CL_MEM_ALLOC_HOST_PTR;
+	cl_int status;
+	cl_mem out_img = clCreateBuffer(ocl_get_context(), mem_flags, size, nullptr, &status);
+	if( OCL_FAILED(status) ) {
+		LogError(LOG_OCL "imageIO -- failed to allocate OpenCL buffer of %zu bytes\n", size);
+		return false;
+	}
+	printf("imageIO -- Convert color: %s -> %s\n", imageFormatToStr(format), imageFormatToStr(IMAGE_I420));
+	if( OCL_FAILED(oclConvertColor((cl_mem)ptr, format, (cl_mem)out_img, outputFormat, width, height)) )
+	{
+		LogError(LOG_GSTREAMER "gstBufferManager -- unsupported image format (%s)\n", imageFormatToStr(format));
+		LogError(LOG_GSTREAMER "                    supported formats are:\n");
+		LogError(LOG_GSTREAMER "                       * rgb8\n");		
+		LogError(LOG_GSTREAMER "                       * rgba8\n");		
+		LogError(LOG_GSTREAMER "                       * rgb32f\n");		
+		LogError(LOG_GSTREAMER "                       * rgba32f\n");
+
+		return -1;
+	}
+#endif
+	//OCL(clFinish(ocl_get_queue()));	// TODO: do we need this?
+	cl_int status;
+	void* mapped_ptr = clEnqueueMapBuffer(ocl_get_queue(), (cl_mem)img, CL_TRUE, CL_MAP_READ, 0, 
+			imageFormatSize(format, width, height), 0, NULL, NULL,&status);
+	CHECK_OPENCL_ERROR(status, "clEnqueueMapBuffer");
+	cl_mem cl_img_obj = (cl_mem)img;
+
+	img = (unsigned char*)mapped_ptr; // yeah...
+
+	//TODO: we are not allocate anything because we do not support convertion for float format yet, but add release buffer here when we do
 	#define release_return(x) 	\
+		clEnqueueUnmapMemObject(ocl_get_queue(), cl_img_obj, mapped_ptr, 0, nullptr, nullptr);\
 		return x;
 #endif
 	// determine the file extension
