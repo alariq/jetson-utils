@@ -3,3 +3,6 @@ build/
 .ccls-cache/
 build-*/
 .cache/
+imgui.ini
+Session.vim
+compile_commands.json
