@@ -370,6 +370,66 @@ bool gstCamera::parseCaps( GstStructure* caps, videoOptions::Codec* _codec, imag
 	return true;
 }
 
+bool get_closest(GstStructure* caps, const char* name, const int in_value, int* o_value)
+{
+	int* v_array = nullptr;
+	int v_array_size = 0;
+	int best;
+
+	if(!gst_structure_get_int(caps, name, &best)) {
+		// have several values e.g. for width/height, let's parse them
+		const GValue* w_val = gst_structure_get_value(caps, name);
+		if(!w_val) {
+			LogError(LOG_GSTREAMER "gstCamera -- caps hold unsupported formatted values\n");
+			return false;
+		}
+
+		const GValue* v = gst_structure_get_value(caps, name);
+		if (GST_VALUE_HOLDS_LIST(v)) {
+			GValueArray* arr;
+			if(gst_structure_get_list(caps, name, &arr) && arr->n_values>0 && G_VALUE_HOLDS_INT(arr->values + 0)) {
+				v_array_size  = arr->n_values;
+				v_array = new int[v_array_size];
+				for (int i = 0; i < v_array_size; i++) {
+					v_array[i] = g_value_get_int(arr->values + i);
+				}
+			} else {
+				LogError(LOG_GSTREAMER "gstCamera -- caps hold list, but either 0 len or not integers\n");
+				return false;
+			}
+		} else if (GST_VALUE_HOLDS_INT_RANGE(v)) {
+			int w_min = gst_value_get_int_range_min(w_val);
+			int w_max = gst_value_get_int_range_max(w_val);
+			int w_step = gst_value_get_int_range_step(w_val);
+			for(int w = w_min; w<=w_max; w+= w_step) {
+				v_array_size +=1;
+			}
+			v_array = new int[v_array_size];
+			int i=0;
+			for(int w = w_min; w<=w_max; w+= w_step) {
+				v_array[i++] = w;
+			}
+			LogVerbose(LOG_GSTREAMER "gstCamera -- range value min: %d max: %d step: %d\n", w_min, w_max, w_step);
+		} else if (GST_VALUE_HOLDS_ARRAY(v)) {
+			LogError(LOG_GSTREAMER "gstCamera -- TODO: implement array parsing\n");
+			return false;
+		}
+
+		best = v_array[0];
+		for(int i=0;i<v_array_size; ++i) {
+			if( abs(v_array[i] - in_value) < abs(best - in_value)) {
+				best = v_array[i];
+			}
+		}
+	}
+
+	assert(o_value);
+	if(o_value) {
+		*o_value = best;
+	}
+	return true;
+}
+
 
 // parseCaps
 bool gstCamera::parseCaps( GstStructure* caps, videoOptions::Codec* _codec, imageFormat* _format, uint32_t* _width, uint32_t* _height, std::vector<float>& frameRates ) const
@@ -391,41 +451,15 @@ bool gstCamera::parseCaps( GstStructure* caps, videoOptions::Codec* _codec, imag
 	// get width/height
 	int width  = 0;
 	int height = 0;
-	
-	if( !gst_structure_get_int(caps, "width", &width) || !gst_structure_get_int(caps, "height", &height) ) {
-		// have several values for width/height, let's parse them
-		const GValue* w_val = gst_structure_get_value(caps, "width");
-		const GValue* h_val = gst_structure_get_value(caps, "height");
-		if(!w_val || !h_val)
-			return false;
 
-		int w_min = gst_value_get_int_range_min(w_val);
-		int w_max = gst_value_get_int_range_max(w_val);
-		int w_step = gst_value_get_int_range_step(w_val);
-		LogVerbose("width min: %d max: %d step: %d\n", w_min, w_max, w_step);
+	if(!get_closest(caps, "width", (int)*_width, &width)) {
+		LogError(LOG_GSTREAMER "gstCamera -- failed to parse caps for width\n");
+		return false;
+	}
 
-		int h_min = gst_value_get_int_range_min(h_val);
-		int h_max = gst_value_get_int_range_max(h_val);
-		int h_step = gst_value_get_int_range_step(h_val);
-		LogVerbose("height min: %d max: %d step: %d\n", h_min, h_max, h_step);
-
-		int best = w_min;
-		int diff = abs(best - *(int*)_width);
-		for(int w = w_min; w<=w_max; w+= w_step) {
-			if( abs(w - *(int*)_width) < abs(best - *(int*)_width)) {
-				best = w;
-			}
-		}
-		width = best;
-
-		best = h_min;
-		diff = abs(best - *(int*)_height);
-		for(int h = h_min; h<=h_max; h+= h_step) {
-			if( abs(h - *(int*)_height) < abs(best - *(int*)_height)) {
-				best = h;
-			}
-		}
-		height = best;
+	if(!get_closest(caps, "height", (int)*_height, &height)) {
+		LogError(LOG_GSTREAMER "gstCamera -- failed to parse caps for height\n");
+		return false;
 	}
 
 	// get highest framerate
@@ -526,6 +560,8 @@ bool gstCamera::matchCaps( GstCaps* device_caps )
 		// pick this one if the resolution is closer, or if the resolution is the same but the framerate is better
 		// (or if the framerate is the same and previous codec was MJPEG, pick the new one because MJPEG isn't preferred)
 		if( resolutionDiff < bestResolution || (resolutionDiff == bestResolution && (frameRate > bestFrameRate || bestCodec == videoOptions::CODEC_MJPEG)) )
+		//sebi: to pick exact given resolution
+		//if( resolutionDiff < bestResolution || (resolutionDiff == bestResolution && bestCodec == videoOptions::CODEC_MJPEG) )
 		{
 			bestResolution = resolutionDiff;
 			bestFrameRate = frameRate;
