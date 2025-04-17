@@ -94,10 +94,9 @@ __kernel void I420ToRGB(
 
 	const float3 RGB = YUV2RGB(Y, U, V);
 
-    // Somehow we need to swap RGB -> BGR, not sure why, for CUDA it is ok
-	dst[num_channels*(y * width + x) + 0] = (uchar)RGB.x;
+	dst[num_channels*(y * width + x) + 0] = (uchar)RGB.z;
 	dst[num_channels*(y * width + x) + 1] = (uchar)RGB.y;
-	dst[num_channels*(y * width + x) + 2] = (uchar)RGB.z;
+	dst[num_channels*(y * width + x) + 2] = (uchar)RGB.x;
     if(num_channels==4) {
         dst[num_channels*(y * width + x) + 3] = 255;
     }
