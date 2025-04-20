@@ -194,10 +194,11 @@ static void print_modes_info(const drmModeConnector* conn) {
 	for (int j = 0; j < conn->count_modes; ++j) {
 		drmModeModeInfo *mode = &conn->modes[j];
 
-		printf("  %"PRIi32"x%"PRIi32"%s_%.02f\n",
+		printf("  %"PRIi32"x%"PRIi32"%s_%.02f name: %s\n",
 				mode->hdisplay, mode->vdisplay,
 				mode->flags & DRM_MODE_FLAG_INTERLACE ? "i" : "",
-				refresh_rate(mode) / 1000.0);
+				refresh_rate(mode) / 1000.0,
+				mode->name);
 	}
 }
 
@@ -390,13 +391,24 @@ int init_drm(struct drm *drm, const char *device, const char *mode_str,
 
 	/* find user requested mode: */
 	if (mode_str && *mode_str) {
+		unsigned int vrefresh_best = 0;
 		for (i = 0; i < connector->count_modes; i++) {
 			drmModeModeInfo *current_mode = &connector->modes[i];
 
 			if (strcmp(current_mode->name, mode_str) == 0) {
 				if (vrefresh == 0 || current_mode->vrefresh == vrefresh) {
-					drm->mode = current_mode;
-					break;
+					printf("check mode: %dx%d@%d\n", current_mode->hdisplay, current_mode->vdisplay, current_mode->vrefresh); 
+					if(vrefresh != 0) {
+						drm->mode = current_mode;
+						break;
+					}
+
+					// else search for best refresh_rate
+					if(current_mode->vrefresh >= vrefresh_best) {
+						drm->mode = current_mode;
+						printf("last selected: %dx%d@%d\n", current_mode->hdisplay, current_mode->vdisplay, current_mode->vrefresh); 
+						vrefresh_best = current_mode->vrefresh;
+					}
 				}
 			}
 		}

@@ -608,6 +608,10 @@ bool drmRenderer::init()
 	int connector_id = -1;
 	unsigned int vrefresh = 0;
 
+	if(mOptions.width!=0 && mOptions.height!=0) {
+		snprintf(mode_str, DRM_DISPLAY_MODE_LEN, "%dx%d", mOptions.width, mOptions.height);
+	}
+
 	uint32_t format = DRM_FORMAT_XRGB8888;
 	uint64_t modifier = DRM_FORMAT_MOD_LINEAR;
 	bool surfaceless = false;
