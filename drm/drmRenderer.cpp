@@ -64,6 +64,7 @@ static int mCurBuffer = 0;
 static struct drm_dumb_fb mFramebuffers[mNumBuffers];
 static drmModeCrtc* mSavedCrtc = nullptr;
 static bool bUseDumbBuffers = false;
+static bool bVSync = true;
 
 #define LOG_DRM  "[drm]"
 
@@ -865,9 +866,10 @@ bool drmRenderer::RenderGBM( void* image, uint32_t width, uint32_t height, image
 #else
 	// Here you could also update drm plane layers if you want hw composition
 
-	int ret = drmModePageFlip(drm->fd, drm->crtc_id, rfc.fb->fb_id,
-			DRM_MODE_PAGE_FLIP_EVENT, &waiting_for_flip);
-	if (ret) {
+    const uint32_t flags = bVSync ? DRM_MODE_PAGE_FLIP_EVENT | DRM_MODE_PAGE_FLIP_ASYNC : 0;
+
+    int ret = drmModePageFlip(drm->fd, drm->crtc_id, rfc.fb->fb_id, flags, &waiting_for_flip);
+    if (ret) {
 		printf("failed to queue page flip: %s\n", strerror(errno));
 		return -1;
 	}
@@ -875,12 +877,15 @@ bool drmRenderer::RenderGBM( void* image, uint32_t width, uint32_t height, image
 	fd_set fds;
 	{
 	SCOPED_TIMER("waiting_for_flip");
-	while (waiting_for_flip) {
+	while (waiting_for_flip && bVSync) {
 		FD_ZERO(&fds);
 		// reading from stdin causes issues when running in backgroung
 		// as we receive input which causes return and memory leaks
 		// there is a fix for it on gitlab if needed, but for now 
 		// I just disabled stdin fd polling
+		// fix on gitlab: Allow running in background with STDIN set to O_NONBLOCKING 
+		// fix on gitlab: https://gitlab.freedesktop.org/mesa/kmscube/-/commit/467e86c5cbeb2a2051b31ce2c240d6ddf5bc3112
+
 		//FD_SET(0, &fds);
 		FD_SET(drm->fd, &fds);
 
