@@ -54,12 +54,12 @@ static cl_int launchYUYVToRGB(ocl_program& prg, cl_mem input, cl_mem output, siz
         // do not release because we return this event
         //clReleaseEvent(event);
 
-        LogInfo("[GPU] crop Total exec time: %f\n", exec_time);
+        LogInfo("[GPU] launchYUYVToRGB exec time: %f\n", exec_time);
     }
 
 	if(status == CL_SUCCESS)
 	{
-		//SCOPED_TIMER("getSbuwindow clWaitForEvents");
+		SCOPED_TIMER("launchYUYVToRGB - clWaitForEvents ");
 		status = clWaitForEvents(1, &event);
 		CHECK_OPENCL_ERROR_NORET(status, "clWaitForEvents Failed with Error Code:");
 		clReleaseEvent(event);

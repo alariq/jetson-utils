@@ -58,12 +58,12 @@ static cl_int launchI420ToRGB(ocl_program& prg, cl_mem input, cl_mem output, siz
         // do not release because we return this event
         //clReleaseEvent(event);
 
-        LogInfo("[GPU] kernel exec time: %f\n", exec_time);
+        LogInfo("[GPU] launchI420ToRGB exec time: %f\n", exec_time);
     }
 
     if(status == CL_SUCCESS)
     {
-	    //SCOPED_TIMER("getSbuwindow clWaitForEvents");
+	    SCOPED_TIMER("launchI420ToRGB - clWaitForEvents");
 	    status = clWaitForEvents(1, &event);
 	    CHECK_OPENCL_ERROR_NORET(status, "clWaitForEvents Failed with Error Code:");
 	    clReleaseEvent(event);
@@ -170,7 +170,7 @@ static cl_int launchRGBTo420(ocl_program& prg, cl_mem input, int i_pitch, cl_mem
 
     if(status == CL_SUCCESS)
     {
-	    //SCOPED_TIMER("getSbuwindow clWaitForEvents");
+	    SCOPED_TIMER("launchRGBTo420 - clWaitForEvents");
 	    status = clWaitForEvents(1, &event);
 	    CHECK_OPENCL_ERROR_NORET(status, "clWaitForEvents Failed with Error Code:");
 	    clReleaseEvent(event);

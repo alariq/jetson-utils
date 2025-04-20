@@ -57,12 +57,12 @@ static cl_int launchNV12ToRGB(ocl_program& prg, cl_mem input, cl_mem output, siz
         // do not release because we return this event
         //clReleaseEvent(event);
 
-        LogInfo("[GPU] kernel exec time: %f\n", exec_time);
+        LogInfo("[GPU] launchNV12ToRGB exec time: %f\n", exec_time);
     }
 
     if(status == CL_SUCCESS)
     {
-	    //SCOPED_TIMER("getSbuwindow clWaitForEvents");
+	    SCOPED_TIMER("launchNV12ToRGB - clWaitForEvents");
 	    status = clWaitForEvents(1, &event);
 	    CHECK_OPENCL_ERROR_NORET(status, "clWaitForEvents Failed with Error Code:");
 	    clReleaseEvent(event);
